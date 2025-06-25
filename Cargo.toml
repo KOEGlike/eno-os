@@ -34,4 +34,4 @@ slint = { git = "https://github.com/slint-ui/slint", default-features = false, f
 
 [build-dependencies]
 embuild = "0.33"
-# slint-build = "1.12.1"
+slint-build = "1.12.1"
