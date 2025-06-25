@@ -25,10 +25,9 @@ experimental = ["esp-idf-svc/experimental"]
 [dependencies]
 log = "0.4"
 
-embassy-executor = { version = "0.7", features = ["executor-thread", "arch-std"] }
+embassy-executor = { version = "0.7", features = ["executor-thread", "arch-std",] }
 
- slint = {version="1.12", default-features = false , features=["std", "software-renderer-systemfonts", "image-default-formats","renderer-software"]}
-
+slint = { git = "https://github.com/slint-ui/slint", default-features = false, features = ["libm","renderer-software","unsafe-single-threaded","compat-1-2"] }
 # --- Temporary workaround for embassy-executor < 0.8 ---
  esp-idf-svc = { version = "0.51", features = ["embassy-time-driver", "embassy-sync"] }
  critical-section = { version = "1.1", features = ["std"], default-features = false }
