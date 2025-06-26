@@ -25,7 +25,10 @@ experimental = ["esp-idf-svc/experimental"]
 [dependencies]
 log = "0.4"
 
+static_cell="2"
+
 embassy-executor = { version = "0.7", features = ["executor-thread", "arch-std",] }
+embassy-time = { version = "0.4.0"}
 # --- Temporary workaround for embassy-executor < 0.8 ---
 esp-idf-svc = { version = "0.51", features = ["embassy-time-driver", "embassy-sync"] }
 critical-section = { version = "1.1", features = ["std"], default-features = false }

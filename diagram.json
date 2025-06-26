@@ -1,15 +1,34 @@
 {
     "version": 1,
+    "author": "Balázs Marcell",
     "editor": "wokwi",
-    "author": "Balázs Marcell <KoegLike@proton.me>",
     "parts": [
         {
             "type": "board-esp32-devkit-c-v4",
             "id": "esp",
-            "top": 0.59,
-            "left": 0.67,
+            "top": 0,
+            "left": 0,
             "attrs": {
                 "flashSize": "16"
+            }
+        },
+        {
+            "type": "wokwi-resistor",
+            "id": "r1",
+            "top": 177.6,
+            "left": -77.35,
+            "rotate": 90,
+            "attrs": {
+                "value": "1000"
+            }
+        },
+        {
+            "type": "wokwi-led",
+            "id": "led1",
+            "top": 92.4,
+            "left": -63.4,
+            "attrs": {
+                "color": "red"
             }
         }
     ],
@@ -25,10 +44,32 @@
             "$serialMonitor:TX",
             "",
             []
+        ],
+        [
+            "led1:C",
+            "r1:1",
+            "green",
+            [
+                "v0"
+            ]
+        ],
+        [
+            "r1:2",
+            "esp:GND.1",
+            "green",
+            [
+                "h28.8",
+                "v-49.2"
+            ]
+        ],
+        [
+            "led1:A",
+            "esp:12",
+            "green",
+            [
+                "v0"
+            ]
         ]
     ],
-    "serialMonitor": {
-        "display": "terminal",
-        "convertEol": true
-    }
+    "dependencies": {}
 }
