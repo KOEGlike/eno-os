@@ -34,8 +34,6 @@ slint = { git = "https://github.com/slint-ui/slint", default-features = false, f
 
 symphonia = "0.5.4"
 
-librespot = {version = "0.6.0", default-features = false, features = ["with-libmdns"]}
-
 as5600 = "0.8.0"
 bq27xxx = "0.0.2"
 
