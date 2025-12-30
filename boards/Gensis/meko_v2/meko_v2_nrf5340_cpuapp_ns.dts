@@ -1,0 +1,17 @@
+/dts-v1/;
+#include <nordic/nrf5340_cpuappns_qkaa.dtsi>
+#include "meko_v2-pinctrl.dtsi"
+
+/ {
+	model = "a music player (CPUAPP Non-Secure)";
+	compatible = "Gensis,meko-v2-cpuapp-ns";
+
+	chosen {
+		zephyr,sram = &sram0_ns;
+		zephyr,flash = &flash0;
+		zephyr,code-partition = &slot0_ns_partition;
+	};
+};
+
+#include "meko_v2-cpuapp_partitioning.dtsi"
+#include "meko_v2-shared_sram.dtsi"

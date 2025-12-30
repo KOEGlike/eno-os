@@ -1,0 +1,10 @@
+identifier: meko_v2/nrf5340/cpunet
+name: a music player
+vendor: Gensis
+type: mcu
+arch: arm
+ram: 64
+flash: 256
+toolchain:
+  - zephyr
+supported: []

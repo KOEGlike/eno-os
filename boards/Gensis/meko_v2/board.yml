@@ -1,0 +1,8 @@
+board:
+  name: meko_v2
+  vendor: Gensis
+  socs:
+  - name: nrf5340
+    variants:
+    - name: ns
+      cpucluster: cpuapp
