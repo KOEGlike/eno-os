@@ -1,5 +1,9 @@
 if  BOARD_MEKO_V2_NRF5340_CPUAPP || BOARD_MEKO_V2_NRF5340_CPUAPP_NS
 
+config GPIO
+	default y
+
+
 # Code Partition:
 #
 # For the secure version of the board the firmware is linked at the beginning
@@ -24,6 +28,15 @@ if  BOARD_MEKO_V2_NRF5340_CPUAPP || BOARD_MEKO_V2_NRF5340_CPUAPP_NS
 # For the non-secure version of the board, the firmware image SRAM is
 # always restricted to the allocated non-secure SRAM partition.
 #
+
+config ARM_MPU
+    default y
+
+config HW_STACK_PROTECTION
+    default y
+
+config ARM_TRUSTZONE_M
+    default y
 
 if BOARD_MEKO_V2_NRF5340_CPUAPP && TRUSTED_EXECUTION_SECURE
 
