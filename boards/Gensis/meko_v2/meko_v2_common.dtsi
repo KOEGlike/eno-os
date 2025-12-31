@@ -1,0 +1,49 @@
+/*
+ * Copyright (c) 2020 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&gpio0 {
+	status = "okay";
+};
+
+&gpio1 {
+	status = "okay";
+};
+
+/ {
+    buttons {
+        compatible = "gpio-keys";
+
+        button_power: button-0 {
+            gpios = <&gpio0 27 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+            label = "Power button";
+            zephyr,code = <INPUT_KEY_0>;
+        };
+
+        button_side_left: button-1 {
+            gpios = <&gpio0 5 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+            label = "Left side button";
+            zephyr,code = <INPUT_KEY_1>;
+        };
+
+        button_side_right: button-2 {
+            gpios = <&gpio0 30 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+            label = "Right side button";
+            zephyr,code = <INPUT_KEY_2>;
+        };
+
+        button_volume_up: button-3 {
+            gpios = <&gpio1 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+            label = "Volume up button";
+            zephyr,code = <INPUT_KEY_3>;
+        };
+
+        button_volume_down: button-4 {
+            gpios = <&gpio1 5 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+            label = "Volume down button";
+            zephyr,code = <INPUT_KEY_4>;
+        };
+    };
+};

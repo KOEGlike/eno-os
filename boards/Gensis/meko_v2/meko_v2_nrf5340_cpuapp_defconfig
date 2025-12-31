@@ -1,1 +1,5 @@
+# Enable MPU
+CONFIG_ARM_MPU=y
 
+# Enable TrustZone-M
+CONFIG_ARM_TRUSTZONE_M=y

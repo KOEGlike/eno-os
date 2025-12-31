@@ -29,14 +29,6 @@ config GPIO
 # always restricted to the allocated non-secure SRAM partition.
 #
 
-config ARM_MPU
-    default y
-
-config HW_STACK_PROTECTION
-    default y
-
-config ARM_TRUSTZONE_M
-    default y
 
 if BOARD_MEKO_V2_NRF5340_CPUAPP && TRUSTED_EXECUTION_SECURE
 
@@ -59,3 +51,9 @@ config HEAP_MEM_POOL_ADD_SIZE_BOARD
 	default 4096 if BT_HCI_IPC
 
 endif #  BOARD_MEKO_V2_NRF5340_CPUAPP || BOARD_MEKO_V2_NRF5340_CPUAPP_NS
+
+if BOARD_MEKO_V2_NRF5340_CPUNET
+
+
+
+endif #BOARD_MEKO_V2_NRF5340_CPUNET

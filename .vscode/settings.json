@@ -1,5 +1,8 @@
 {
     "nrf-connect.applications": [
         "${workspaceFolder}/eno-os"
+    ],
+    "cSpell.words": [
+        "gpios"
     ]
 }
