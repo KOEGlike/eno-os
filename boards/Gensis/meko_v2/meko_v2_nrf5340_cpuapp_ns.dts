@@ -1,6 +1,7 @@
 /dts-v1/;
 #include <nordic/nrf5340_cpuappns_qkaa.dtsi>
 #include "meko_v2-pinctrl.dtsi"
+#include "meko_v2_common.dtsi"
 
 / {
 	model = "a music player (CPUAPP Non-Secure)";
