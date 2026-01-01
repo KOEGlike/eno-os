@@ -3,6 +3,9 @@
         "${workspaceFolder}/eno-os"
     ],
     "cSpell.words": [
-        "gpios"
+        "gpios",
+        "gpiote",
+        "SEGGER",
+        "UART"
     ]
 }
