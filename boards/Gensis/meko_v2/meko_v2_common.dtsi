@@ -12,7 +12,16 @@
 	status = "okay";
 };
 
+&gpiote {
+    status = "okay";
+};
+
 / {
+
+    motor: zephyr,user {
+		motor-gpios = <&gpio1 15 0>;
+	};
+
     buttons {
         compatible = "gpio-keys";
 

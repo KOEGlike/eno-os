@@ -1,9 +1,14 @@
-if  BOARD_MEKO_V2_NRF5340_CPUAPP || BOARD_MEKO_V2_NRF5340_CPUAPP_NS
+if BOARD_MEKO_V2_NRF5340_CPUAPP || BOARD_MEKO_V2_NRF5340_CPUAPP_NS || BOARD_MEKO_V2_NRF5340_CPUNET
 
 config GPIO
 	default y
 
+config PWM
+	default y
 
+endif
+
+if  BOARD_MEKO_V2_NRF5340_CPUAPP || BOARD_MEKO_V2_NRF5340_CPUAPP_NS
 # Code Partition:
 #
 # For the secure version of the board the firmware is linked at the beginning
@@ -51,9 +56,3 @@ config HEAP_MEM_POOL_ADD_SIZE_BOARD
 	default 4096 if BT_HCI_IPC
 
 endif #  BOARD_MEKO_V2_NRF5340_CPUAPP || BOARD_MEKO_V2_NRF5340_CPUAPP_NS
-
-if BOARD_MEKO_V2_NRF5340_CPUNET
-
-
-
-endif #BOARD_MEKO_V2_NRF5340_CPUNET
