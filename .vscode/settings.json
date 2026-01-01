@@ -1,4 +1,5 @@
 {
+    "editor.formatOnSave": true,
     "nrf-connect.applications": [
         "${workspaceFolder}/eno-os"
     ],
