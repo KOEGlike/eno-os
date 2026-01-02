@@ -19,7 +19,7 @@
     };
 
     motor: zephyr,user {
-        motor-gpios = <&gpio1 15 GPIO_ACTIVE_LOW>;
+        motor-gpios = <&gpio1 15 GPIO_ACTIVE_HIGH>;
     };
 
     buttons {

@@ -4,6 +4,7 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 
+LOG_MODULE_REGISTER(MAIN);
 /* STEP 9 - Increase the sleep time from 100ms to 10 minutes  */
 #define SLEEP_TIME_MS 10 * 60 * 1000
 
@@ -25,6 +26,8 @@ static struct gpio_callback button_cb_data;
 
 int main(void)
 {
+        LOG_INF("Booted up");
+        printk("testing");
         int ret;
 
         if (!device_is_ready(motor.port))
@@ -37,7 +40,7 @@ int main(void)
                 return -1;
         }
 
-        ret = gpio_pin_configure_dt(&motor, GPIO_OUTPUT_ACTIVE);
+        ret = gpio_pin_configure_dt(&motor, GPIO_ACTIVE_HIGH);
         if (ret < 0)
         {
                 return -1;
