@@ -1,15 +1,11 @@
-/*
- * Copyright (c) 2020 Nordic Semiconductor ASA
- *
- * SPDX-License-Identifier: Apache-2.0
- */
+#include <zephyr/dt-bindings/mipi_dbi/mipi_dbi.h>
 
 &gpio0 {
-	status = "okay";
+    status = "okay";
 };
 
 &gpio1 {
-	status = "okay";
+    status = "okay";
 };
 
 &gpiote {
@@ -18,9 +14,13 @@
 
 / {
 
+    chosen {
+        zephyr,display=&epd;
+    };
+
     motor: zephyr,user {
-		motor-gpios = <&gpio1 15 0>;
-	};
+        motor-gpios = <&gpio1 15 GPIO_ACTIVE_LOW>;
+    };
 
     buttons {
         compatible = "gpio-keys";
@@ -53,6 +53,37 @@
             gpios = <&gpio1 5 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
             label = "Volume down button";
             zephyr,code = <INPUT_KEY_4>;
+        };
+    };
+
+    mipi_dbi {
+        compatible = "zephyr,mipi-dbi-spi";
+        spi-dev = <&spi1>;
+
+        dc-gpios = <&gpio0  14 GPIO_ACTIVE_HIGH>;
+        reset-gpios = <&gpio0 12 GPIO_ACTIVE_LOW>;
+
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        epd: ssd16xx@0 {
+            compatible = "solomon,ssd1681";
+            mipi-max-frequency = <4000000>;
+            reg = <0>;
+            width = <200>;
+            height = <200>;
+
+            busy-gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
+
+            tssv = <0x80>;
+
+            full {
+                border-waveform = <0x05>;
+            };
+
+            partial {
+                border-waveform = <0x3c>;
+            };
         };
     };
 };

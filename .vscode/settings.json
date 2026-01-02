@@ -4,9 +4,21 @@
         "${workspaceFolder}/eno-os"
     ],
     "cSpell.words": [
+        "epaper",
+        "gdeh",
+        "gooddisplay",
         "gpios",
         "gpiote",
+        "LVGL",
+        "mipi",
+        "MOSI",
+        "pinctrl",
+        "PSEL",
+        "psels",
         "SEGGER",
-        "UART"
+        "SPIM",
+        "UART",
+        "waveshare",
+        "xxfb"
     ]
 }
