@@ -20,5 +20,9 @@
         "UART",
         "waveshare",
         "xxfb"
-    ]
+    ],
+    "nrf-connect.debugging.bindings": {
+        "${workspaceFolder}/build": "Launch build",
+        "${workspaceFolder}/build/eno-os/tfm": "Launch build"
+    }
 }

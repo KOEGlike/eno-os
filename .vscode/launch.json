@@ -1,1 +1,11 @@
-{}
+{
+	"configurations": [
+		{
+			"type": "nrf-connect",
+			"request": "launch",
+			"name": "Launch build",
+			"config": "${workspaceFolder}/build",
+			"runToEntryPoint": "main"
+		}
+	]
+}

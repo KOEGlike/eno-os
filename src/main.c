@@ -19,6 +19,7 @@ static const struct gpio_dt_spec motor = GPIO_DT_SPEC_GET(MOTOR_NODE, motor_gpio
 /* STEP 4 - Define the callback function */
 void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
+        printk("toggled motor");
         gpio_pin_toggle_dt(&motor);
 }
 /* STEP 5 - Define a variable of type static struct gpio_callback */
