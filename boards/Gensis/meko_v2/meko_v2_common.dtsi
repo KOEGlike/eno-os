@@ -1,27 +1,5 @@
 #include <zephyr/dt-bindings/mipi_dbi/mipi_dbi.h>
-
-&gpio0 {
-    status = "okay";
-};
-
-&gpio1 {
-    status = "okay";
-};
-
-&gpiote {
-    status = "okay";
-};
-
-&hfxo {
-    load-capacitors = "internal";
-    load-capacitance-femtofarad = <12000>;
-};
-
-&lfxo {
-    load-capacitors = "internal";
-    load-capacitance-picofarad = <7>;
-};
-
+#include <dt-bindings/regulator/npm13xx.h>
 
 / {
 
@@ -95,6 +73,89 @@
 
             partial {
                 border-waveform = <0x3c>;
+            };
+        };
+    };
+};
+
+&gpio0 {
+    status = "okay";
+};
+
+&gpio1 {
+    status = "okay";
+};
+
+&gpiote {
+    status = "okay";
+};
+
+&hfxo {
+    load-capacitors = "internal";
+    load-capacitance-femtofarad = <12000>;
+};
+
+&lfxo {
+    load-capacitors = "internal";
+    load-capacitance-picofarad = <7>;
+};
+
+&spi1 {
+    compatible = "nordic,nrf-spim";
+    status = "okay";
+    pinctrl-0 = <&spi1_default>;
+    pinctrl-1 = <&spi1_sleep>;
+    pinctrl-names = "default", "sleep";
+    cs-gpios = <&gpio0 16 GPIO_ACTIVE_LOW>;
+};
+
+&i2c1 {
+    compatible = "nordic,nrf-twim";
+    status = "okay";
+    pinctrl-0 = <&i2c1_default>;
+    pinctrl-1 = <&i2c1_sleep>;
+    pinctrl-names = "default", "sleep";
+    clock-frequency = <I2C_BITRATE_FAST>;
+
+    npm1300_pmic: npm1300@6b {
+        compatible = "nordic,npm1300";
+        reg = <0x6b>;
+
+        host-int-gpios = <&gpio0 31 0>;
+        pmic-int-pin = <1>;
+
+        npm1300_led: led-controller {
+            compatible = "nordic,npm1300-led";
+
+            nordic,led0-mode = "host";
+            nordic,led1-mode = "error";
+            nordic,led2-mode = "charging";
+        };
+
+        regulators {
+            compatible = "nordic,npm1300-regulator";
+
+            npm1300_buck1: BUCK1 {
+                status = "disabled";
+            };
+
+            npm1300_3v3: BUCK2 {
+                regulator-min-microvolt = <3300000>;
+                regulator-max-microvolt = <3300000>;
+                regulator-boot-on;
+            };
+
+            hall_pwr: LDO1 {
+
+                regulator-min-microvolt = <1800000>;
+                regulator-max-microvolt = <1800000>;
+                regulator-init-microvolt = <1800000>;
+                regulator-initial-mode = <NPM13XX_LDSW_MODE_LDO>;
+                regulator-boot-off;
+            };
+
+            npm1300_ldo2: LDO2 {
+                status = "disabled";
             };
         };
     };

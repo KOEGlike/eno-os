@@ -18,6 +18,7 @@
         "SEGGER",
         "SPIM",
         "tssv",
+        "twim",
         "UART",
         "waveshare",
         "xxfb"
