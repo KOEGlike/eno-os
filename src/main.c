@@ -41,7 +41,7 @@ int main(void)
                 return -1;
         }
 
-        ret = gpio_pin_configure_dt(&motor, GPIO_ACTIVE_HIGH);
+        ret = gpio_pin_configure_dt(&motor, GPIO_OUTPUT_ACTIVE);
         if (ret < 0)
         {
                 return -1;
