@@ -12,6 +12,17 @@
     status = "okay";
 };
 
+&hfxo {
+    load-capacitors = "internal";
+    load-capacitance-femtofarad = <12000>;
+};
+
+&lfxo {
+    load-capacitors = "internal";
+    load-capacitance-picofarad = <7>;
+};
+
+
 / {
 
     chosen {
@@ -19,7 +30,7 @@
     };
 
     motor: zephyr,user {
-        motor-gpios = <&gpio1 15 GPIO_ACTIVE_HIGH>;
+        motor-gpios = <&gpio1 15 0>;
     };
 
     buttons {
