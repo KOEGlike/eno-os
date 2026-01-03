@@ -17,6 +17,7 @@
         "psels",
         "SEGGER",
         "SPIM",
+        "tssv",
         "UART",
         "waveshare",
         "xxfb"
