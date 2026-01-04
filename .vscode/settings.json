@@ -5,14 +5,19 @@
     ],
     "cSpell.words": [
         "epaper",
+        "femtofarad",
         "gdeh",
         "gooddisplay",
         "gpios",
         "gpiote",
+        "hfxo",
+        "LDSW",
+        "lfxo",
         "LVGL",
         "mipi",
         "MOSI",
         "pinctrl",
+        "pmic",
         "printk",
         "PSEL",
         "psels",
@@ -26,7 +31,8 @@
     ],
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/build": "Launch build",
-        "${workspaceFolder}/build/eno-os/tfm": "Launch build"
+        "${workspaceFolder}/build/eno-os/tfm": "Launch build",
+        "${workspaceFolder}/build/eno-os": "Launch eno-os"
     },
     "C_Cpp.default.compileCommands": "${workspaceFolder}/build/eno-os/compile_commands.json"
 }

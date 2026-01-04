@@ -6,6 +6,13 @@
 			"name": "Launch build",
 			"config": "${workspaceFolder}/build",
 			"runToEntryPoint": "main"
+		},
+		{
+			"type": "nrf-connect",
+			"request": "launch",
+			"name": "Launch eno-os",
+			"config": "${workspaceFolder}/build/eno-os",
+			"runToEntryPoint": "main"
 		}
 	]
 }
