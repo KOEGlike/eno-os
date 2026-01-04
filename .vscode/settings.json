@@ -13,6 +13,7 @@
         "mipi",
         "MOSI",
         "pinctrl",
+        "printk",
         "PSEL",
         "psels",
         "SEGGER",
@@ -26,5 +27,6 @@
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/build": "Launch build",
         "${workspaceFolder}/build/eno-os/tfm": "Launch build"
-    }
+    },
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/eno-os/compile_commands.json"
 }

@@ -4,25 +4,27 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 
+#include <lvgl.h>
+#include <zephyr/drivers/display.h>
+
 LOG_MODULE_REGISTER(MAIN);
-/* STEP 9 - Increase the sleep time from 100ms to 10 minutes  */
+
 #define SLEEP_TIME_MS 10 * 60 * 1000
 
-/* SW0_NODE is the devicetree node identifier for the node with alias "sw0" */
 #define SW0_NODE DT_NODELABEL(button_side_right)
 static const struct gpio_dt_spec button = GPIO_DT_SPEC_GET(SW0_NODE, gpios);
 
-/* MOTOR_NODE is the devicetree node identifier for the node with alias "led0". */
 #define MOTOR_NODE DT_NODELABEL(motor)
 static const struct gpio_dt_spec motor = GPIO_DT_SPEC_GET(MOTOR_NODE, motor_gpios);
 
-/* STEP 4 - Define the callback function */
+#define DISPLAY_NODE DT_CHOSEN(zephyr_display)
+static const struct device *display = DEVICE_DT_GET(DISPLAY_NODE);
+
 void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
         printk("toggled motor");
         gpio_pin_toggle_dt(&motor);
 }
-/* STEP 5 - Define a variable of type static struct gpio_callback */
 static struct gpio_callback button_cb_data;
 
 int main(void)
@@ -41,6 +43,12 @@ int main(void)
                 return -1;
         }
 
+        if (!device_is_ready(display))
+        {
+                printk("Error setting up display\r\n");
+                return -1;
+        }
+
         ret = gpio_pin_configure_dt(&motor, GPIO_OUTPUT_ACTIVE);
         if (ret < 0)
         {
@@ -52,14 +60,15 @@ int main(void)
         {
                 return -1;
         }
-        /* STEP 3 - Configure the interrupt on the button's pin */
         ret = gpio_pin_interrupt_configure_dt(&button, GPIO_INT_EDGE_TO_ACTIVE);
 
-        /* STEP 6 - Initialize the static struct gpio_callback variable   */
         gpio_init_callback(&button_cb_data, button_pressed, BIT(button.pin));
-
-        /* STEP 7 - Add the callback function by calling gpio_add_callback()   */
         gpio_add_callback(button.port, &button_cb_data);
+
+        lv_obj_t *label;
+        label = lv_label_create(lv_scr_act());
+        lv_label_set_text(label, "Hello world!");
+        lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
 
         while (1)
         {
