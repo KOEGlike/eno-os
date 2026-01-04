@@ -4,9 +4,8 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/logging/log_ctrl.h> /* LOG_PANIC(), log_panic() */
-#include <zephyr/sys/printk.h>
 
-#include <lvgl.h>
+// #include <lvgl.h>
 #include <zephyr/drivers/display.h>
 
 LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
@@ -19,21 +18,19 @@ static const struct gpio_dt_spec button = GPIO_DT_SPEC_GET(SW0_NODE, gpios);
 #define MOTOR_NODE DT_NODELABEL(motor)
 static const struct gpio_dt_spec motor = GPIO_DT_SPEC_GET(MOTOR_NODE, motor_gpios);
 
-#define DISPLAY_NODE DT_CHOSEN(zephyr_display)
-static const struct device *display = DEVICE_DT_GET(DISPLAY_NODE);
+// #define DISPLAY_NODE DT_CHOSEN(zephyr_display)
+// static const struct device *display = DEVICE_DT_GET(DISPLAY_NODE);
 
 void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
-        LOG_WRN("toggled motor\r\n");
+        LOG_INF("toggled motor\r\n");
         gpio_pin_toggle_dt(&motor);
 }
 static struct gpio_callback button_cb_data;
 
 int main(void)
 {
-        printk("APP: main() entered\n");
-
-        LOG_WRN("Booted up\r\n");
+        LOG_INF("Booted up\r\n");
 
         int ret;
 
@@ -51,12 +48,12 @@ int main(void)
                 return -1;
         }
 
-        if (!device_is_ready(display))
-        {
-                LOG_ERR("display not ready: %s", display ? display->name : "(null)");
-                LOG_PANIC();
-                return -1;
-        }
+        // if (!device_is_ready(display))
+        // {
+        //         LOG_ERR("display not ready: %s", display ? display->name : "(null)");
+        //         LOG_PANIC();
+        //         return -1;
+        // }
 
         ret = gpio_pin_configure_dt(&motor, GPIO_OUTPUT_ACTIVE);
         if (ret < 0)
@@ -93,16 +90,16 @@ int main(void)
         // lv_init();
 
         LOG_INF("idididd");
-        LOG_WRN("INITIALIZED LVGL\r\n");
+        LOG_INF("INITIALIZED LVGL\r\n");
 
-        if (display_blanking_off(display))
-        {
-                LOG_WRN("Failed to turn off display blanking!");
-                return 0;
-        }
-        LOG_WRN("Display blanking is off. Screen should be cleared by full refresh.");
+        // if (display_blanking_off(display))
+        // {
+        //         LOG_INF("Failed to turn off display blanking!");
+        //         return 0;
+        // }
+        // LOG_INF("Display blanking is off. Screen should be cleared by full refresh.");
 
-        k_msleep(2000);
+        //        k_msleep(2000);
 
         // lv_obj_t *scr = lv_scr_act();
 
@@ -110,13 +107,13 @@ int main(void)
         // lv_disp_t *disp = lv_disp_get_default();
         // lv_coord_t width = lv_disp_get_hor_res(disp);
         // lv_coord_t height = lv_disp_get_ver_res(disp);
-        // LOG_WRN("Display width: %d, height: %d", width, height);
+        // LOG_INF("Display width: %d, height: %d", width, height);
 
-        // LOG_WRN("\n\ngoing to sleep\r\n");
+        // LOG_INF("\n\ngoing to sleep\r\n");
 
         // k_msleep(20000);
 
-        // LOG_WRN("woke up from long sssss\r\n");
+        // LOG_INF("woke up from long sssss\r\n");
 
         // lv_obj_t *label;
         // label = lv_label_create(scr);
@@ -136,7 +133,7 @@ int main(void)
                 //         lv_label_set_text(label, buf);
                 // }
 
-                LOG_WRN("WOKE UP\r\n");
+                LOG_INF("WOKE UP\r\n");
 
                 // Must be called periodically
                 // lv_task_handler();
