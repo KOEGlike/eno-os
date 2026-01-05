@@ -8,7 +8,7 @@
     };
 
     motor: zephyr,user {
-        motor-gpios = <&gpio1 15 0>;
+        motor-gpios = <&gpio1 15 GPIO_ACTIVE_HIGH>;
     };
 
     buttons {
@@ -47,7 +47,7 @@
 
     mipi_dbi {
         compatible = "zephyr,mipi-dbi-spi";
-        spi-dev = <&spi1>;
+        spi-dev = <&spi2>;
 
         dc-gpios = <&gpio0  14 GPIO_ACTIVE_HIGH>;
         reset-gpios = <&gpio0 12 GPIO_ACTIVE_LOW>;
@@ -98,63 +98,61 @@
     load-capacitance-picofarad = <7>;
 };
 
-&spi1 {
+&spi2 {
     compatible = "nordic,nrf-spim";
     status = "okay";
-    pinctrl-0 = <&spi1_default>;
-    pinctrl-1 = <&spi1_sleep>;
+    pinctrl-0 = <&spi2_default>;
+    pinctrl-1 = <&spi2_sleep>;
     pinctrl-names = "default", "sleep";
     cs-gpios = <&gpio0 16 GPIO_ACTIVE_LOW>;
 };
 
-// &i2c1 {
-    //     compatible = "nordic,nrf-twim";
-    //     status = "okay";
-    //     pinctrl-0 = <&i2c1_default>;
-    //     pinctrl-1 = <&i2c1_sleep>;
-    //     pinctrl-names = "default", "sleep";
-    //     clock-frequency = <I2C_BITRATE_FAST>;
+&i2c1 {
+    compatible = "nordic,nrf-twim";
+    status = "okay";
+    pinctrl-0 = <&i2c1_default>;
+    pinctrl-1 = <&i2c1_sleep>;
+    pinctrl-names = "default", "sleep";
+    clock-frequency = <I2C_BITRATE_FAST>;
 
-    //     npm1300_pmic: npm1300@6b {
-        //         compatible = "nordic,npm1300";
-        //         reg = <0x6b>;
+    npm1300_pmic: npm1300@6b {
+        compatible = "nordic,npm1300";
+        reg = <0x6b>;
 
-        //         host-int-gpios = <&gpio0 31 0>;
-        //         pmic-int-pin = <1>;
+        host-int-gpios = <&gpio0 31 0>;
+        pmic-int-pin = <1>;
 
-        //         npm1300_led: led-controller {
-            //             compatible = "nordic,npm1300-led";
+        npm1300_leds: led-controller {
+            compatible = "nordic,npm1300-led";
 
-            //             nordic,led0-mode = "host";
-            //             nordic,led1-mode = "error";
-            //             nordic,led2-mode = "charging";
-        //         };
+            nordic,led0-mode = "host";
+            nordic,led1-mode = "host";
+            nordic,led2-mode = "host";
+        };
 
-        //         regulators {
-            //             compatible = "nordic,npm1300-regulator";
+        npm1300_regulators: regulators {
+            compatible = "nordic,npm1300-regulator";
 
-            //             npm1300_buck1: BUCK1 {
-                //                 status = "disabled";
-            //             };
+            npm1300_buck1: BUCK1 {
+                status = "disabled";
+            };
 
-            //             npm1300_3v3: BUCK2 {
-                //                 regulator-min-microvolt = <3300000>;
-                //                 regulator-max-microvolt = <3300000>;
-                //                 regulator-boot-on;
-            //             };
+            npm1300_3v3: BUCK2 {
+                regulator-min-microvolt = <3300000>;
+                regulator-max-microvolt = <3300000>;
+                regulator-boot-on;
+            };
 
-            //             hall_pwr: LDO1 {
+            npm1300_hall_pwr: LDO1 {
+                regulator-min-microvolt = <3300000>;
+                regulator-max-microvolt = <3300000>;
+                regulator-initial-mode = <NPM13XX_LDSW_MODE_LDO>;
+                regulator-boot-on;
+            };
 
-                //                 regulator-min-microvolt = <1800000>;
-                //                 regulator-max-microvolt = <1800000>;
-                //                 regulator-init-microvolt = <1800000>;
-                //                 regulator-initial-mode = <NPM13XX_LDSW_MODE_LDO>;
-                //                 regulator-boot-off;
-            //             };
-
-            //             npm1300_ldo2: LDO2 {
-                //                 status = "disabled";
-            //             };
-        //         };
-    //     };
-// };
+            npm1300_ldo2: LDO2 {
+                status = "disabled";
+            };
+        };
+    };
+};

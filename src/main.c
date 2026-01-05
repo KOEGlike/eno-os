@@ -1,20 +1,23 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
-#include <zephyr/drivers/gpio.h>
+
 #include <zephyr/logging/log.h>
 #include <zephyr/logging/log_ctrl.h> /* LOG_PANIC(), log_panic() */
 #include <zephyr/sys/printk.h>
 
-#include <lvgl.h>
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/display.h>
+#include <zephyr/drivers/led.h>
+#include <zephyr/drivers/mfd/npm13xx.h>
+#include <zephyr/drivers/regulator.h>
+#include <zephyr/drivers/sensor.h>
+
+#include <lvgl.h>
 
 LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
 
-#define SLEEP_TIME_MS 2000
-
-#define SW0_NODE DT_NODELABEL(button_side_right)
-static const struct gpio_dt_spec button = GPIO_DT_SPEC_GET(SW0_NODE, gpios);
+#define SLEEP_TIME_MS 200
 
 #define MOTOR_NODE DT_NODELABEL(motor)
 static const struct gpio_dt_spec motor = GPIO_DT_SPEC_GET(MOTOR_NODE, motor_gpios);
@@ -22,31 +25,23 @@ static const struct gpio_dt_spec motor = GPIO_DT_SPEC_GET(MOTOR_NODE, motor_gpio
 #define DISPLAY_NODE DT_CHOSEN(zephyr_display)
 static const struct device *display = DEVICE_DT_GET(DISPLAY_NODE);
 
-void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
-{
-        LOG_WRN("toggled motor\r\n");
-        gpio_pin_toggle_dt(&motor);
-}
-static struct gpio_callback button_cb_data;
+#define NPM13XX_DEVICE(dev) DEVICE_DT_GET(DT_NODELABEL(npm1300_##dev))
+static const struct device *pmic = NPM13XX_DEVICE(pmic);
+static const struct device *leds = NPM13XX_DEVICE(leds);
+static const struct device *regulators = NPM13XX_DEVICE(regulators);
+static const struct device *ldsw = NPM13XX_DEVICE(hall_pwr);
 
 int main(void)
 {
         printk("APP: main() entered\n");
 
-        LOG_WRN("Booted up\r\n");
+        LOG_DBG("Booted up");
 
         int ret;
 
         if (!device_is_ready(motor.port))
         {
                 LOG_ERR("motor.port not ready: %s", motor.port ? motor.port->name : "(null)");
-                LOG_PANIC();
-                return -1;
-        }
-
-        if (!device_is_ready(button.port))
-        {
-                LOG_ERR("button.port not ready: %s", button.port ? button.port->name : "(null)");
                 LOG_PANIC();
                 return -1;
         }
@@ -58,7 +53,14 @@ int main(void)
                 return -1;
         }
 
-        ret = gpio_pin_configure_dt(&motor, GPIO_OUTPUT_ACTIVE);
+        if (!device_is_ready(leds))
+        {
+                LOG_ERR("Error: led device is not ready\n");
+                LOG_PANIC();
+                return -1;
+        }
+
+        ret = gpio_pin_configure_dt(&motor, GPIO_OUTPUT_INACTIVE);
         if (ret < 0)
         {
                 LOG_ERR("gpio_pin_configure_dt(motor) failed: %d", ret);
@@ -66,80 +68,59 @@ int main(void)
                 return -1;
         }
 
-        ret = gpio_pin_configure_dt(&button, GPIO_INPUT);
-        if (ret < 0)
-        {
-                LOG_ERR("gpio_pin_configure_dt(button) failed: %d", ret);
-                LOG_PANIC();
-                return -1;
-        }
-        ret = gpio_pin_interrupt_configure_dt(&button, GPIO_INT_EDGE_TO_ACTIVE);
-        if (ret < 0)
-        {
-                LOG_ERR("gpio_pin_interrupt_configure_dt(button) failed: %d", ret);
-                LOG_PANIC();
-                return -1;
-        }
+        lv_init();
 
-        gpio_init_callback(&button_cb_data, button_pressed, BIT(button.pin));
-        ret = gpio_add_callback(button.port, &button_cb_data);
-        if (ret < 0)
-        {
-                LOG_ERR("gpio_add_callback failed: %d", ret);
-                LOG_PANIC();
-                return -1;
-        }
-
-        // lv_init();
-
-        LOG_INF("idididd");
-        LOG_WRN("INITIALIZED LVGL\r\n");
+        LOG_DBG("INITIALIZED LVGL");
 
         if (display_blanking_off(display))
         {
-                LOG_WRN("Failed to turn off display blanking!");
+                LOG_DBG("Failed to turn off display blanking!");
                 return 0;
         }
-        LOG_WRN("Display blanking is off. Screen should be cleared by full refresh.");
+        LOG_DBG("Display blanking is off. Screen should be cleared by full refresh.");
+
+        for (uint32_t i = 0; i <= 2; i++)
+        {
+                led_off(leds, i);
+        }
+        led_on(leds, 0U);
 
         k_msleep(2000);
 
-        // lv_obj_t *scr = lv_scr_act();
+        lv_obj_t *scr = lv_scr_act();
 
         // // Get display width and height (for layout)
         // lv_disp_t *disp = lv_disp_get_default();
         // lv_coord_t width = lv_disp_get_hor_res(disp);
         // lv_coord_t height = lv_disp_get_ver_res(disp);
-        // LOG_WRN("Display width: %d, height: %d", width, height);
+        // LOG_DBG("Display width: %d, height: %d", width, height);
 
-        // LOG_WRN("\n\ngoing to sleep\r\n");
+        // LOG_DBG("\n\ngoing to sleep");
 
         // k_msleep(20000);
 
-        // LOG_WRN("woke up from long sssss\r\n");
+        // LOG_DBG("woke up from long sssss");
 
-        // lv_obj_t *label;
-        // label = lv_label_create(scr);
-        // lv_obj_set_style_text_color(label, lv_color_black(), LV_STATE_DEFAULT);
-        // lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 5);
-        // lv_label_set_text(label, "Hello, World!");
-        // LOG_INF("Set epd text\n");
+        lv_obj_t *label;
+        label = lv_label_create(scr);
+        lv_obj_set_style_text_color(label, lv_color_black(), LV_STATE_DEFAULT);
+        lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 5);
+        lv_label_set_text(label, "Hello, World!");
+        LOG_DBG("Set epd text\n");
+
+        for (uint32_t i = 0; i <= 2; i++)
+        {
+                led_off(leds, i);
+        }
+        led_on(leds, 2U);
 
         // Do forever
         while (1)
         {
-                // // Update counter label every second
-                // count++;
-                // if ((count % (1000 / SLEEP_TIME_MS)) == 0)
-                // {
-                //         sprintf(buf, "%d", count / (1000 / SLEEP_TIME_MS));
-                //         lv_label_set_text(label, buf);
-                // }
-
-                LOG_WRN("WOKE UP\r\n");
+                LOG_DBG("WOKE UP");
 
                 // Must be called periodically
-                // lv_task_handler();
+                lv_task_handler();
 
                 // Sleep
                 k_msleep(SLEEP_TIME_MS);
