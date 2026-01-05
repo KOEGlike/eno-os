@@ -1,0 +1,9 @@
+{
+	"servers": {
+		"nordic-semiconductor-docs": {
+			"type": "http",
+			"url": "nordicsemi.mcp.kapa.ai"
+		}
+	},
+	"inputs": []
+}

@@ -4,23 +4,23 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/logging/log_ctrl.h> /* LOG_PANIC(), log_panic() */
+#include <zephyr/drivers/led.h>
+#include <zephyr/drivers/mfd/npm13xx.h>
+#include <zephyr/drivers/regulator.h>
+#include <zephyr/drivers/sensor.h>
 
-LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 
-#define SLEEP_TIME_MS 2000
-
-#define SW0_NODE DT_NODELABEL(button_side_right)
-static const struct gpio_dt_spec button = GPIO_DT_SPEC_GET(SW0_NODE, gpios);
+#define SLEEP_TIME_MS 800
 
 #define MOTOR_NODE DT_NODELABEL(motor)
 static const struct gpio_dt_spec motor = GPIO_DT_SPEC_GET(MOTOR_NODE, motor_gpios);
 
-void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
-{
-        LOG_INF("toggled motor\r\n");
-        gpio_pin_toggle_dt(&motor);
-}
-static struct gpio_callback button_cb_data;
+#define NPM13XX_DEVICE(dev) DEVICE_DT_GET(DT_NODELABEL(npm1300_##dev))
+static const struct device *pmic = NPM13XX_DEVICE(pmic);
+static const struct device *leds = NPM13XX_DEVICE(leds);
+static const struct device *regulators = NPM13XX_DEVICE(regulators);
+static const struct device *ldsw = NPM13XX_DEVICE(hall_pwr);
 
 int main(void)
 {
@@ -35,14 +35,7 @@ int main(void)
                 return -1;
         }
 
-        if (!device_is_ready(button.port))
-        {
-                LOG_ERR("button.port not ready: %s", button.port ? button.port->name : "(null)");
-                LOG_PANIC();
-                return -1;
-        }
-
-        ret = gpio_pin_configure_dt(&motor, GPIO_OUTPUT_ACTIVE);
+        ret = gpio_pin_configure_dt(&motor, GPIO_OUTPUT_INACTIVE);
         if (ret < 0)
         {
                 LOG_ERR("gpio_pin_configure_dt(motor) failed: %d", ret);
@@ -50,34 +43,16 @@ int main(void)
                 return -1;
         }
 
-        ret = gpio_pin_configure_dt(&button, GPIO_INPUT);
-        if (ret < 0)
+        if (!device_is_ready(leds))
         {
-                LOG_ERR("gpio_pin_configure_dt(button) failed: %d", ret);
-                LOG_PANIC();
+                LOG_ERR("Error: led device is not ready\n");
                 return -1;
         }
-        ret = gpio_pin_interrupt_configure_dt(&button, GPIO_INT_EDGE_TO_ACTIVE);
-        if (ret < 0)
+        for (uint32_t i = 0; i <= 2; i++)
         {
-                LOG_ERR("gpio_pin_interrupt_configure_dt(button) failed: %d", ret);
-                LOG_PANIC();
-                return -1;
+                led_off(leds, i);
         }
-
-        gpio_init_callback(&button_cb_data, button_pressed, BIT(button.pin));
-        ret = gpio_add_callback(button.port, &button_cb_data);
-        if (ret < 0)
-        {
-                LOG_ERR("gpio_add_callback failed: %d", ret);
-                LOG_PANIC();
-                return -1;
-        }
-
-        // lv_init();
-
-        LOG_INF("idididd");
-        LOG_INF("INITIALIZED LVGL\r\n");
+        led_on(leds, 1U);
 
         // Do forever
         while (1)
@@ -85,7 +60,6 @@ int main(void)
 
                 LOG_INF("WOKE UP\r\n");
 
-                // Sleep
                 k_msleep(SLEEP_TIME_MS);
         }
 }
