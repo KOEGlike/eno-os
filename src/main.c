@@ -3,6 +3,7 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/printk.h>
 #include <zephyr/logging/log_ctrl.h> /* LOG_PANIC(), log_panic() */
 #include <zephyr/drivers/led.h>
 #include <zephyr/drivers/mfd/npm13xx.h>
@@ -11,7 +12,7 @@
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 
-#define SLEEP_TIME_MS 800
+#define SLEEP_TIME_MS 500
 
 #define MOTOR_NODE DT_NODELABEL(motor)
 static const struct gpio_dt_spec motor = GPIO_DT_SPEC_GET(MOTOR_NODE, motor_gpios);
@@ -24,7 +25,8 @@ static const struct device *ldsw = NPM13XX_DEVICE(hall_pwr);
 
 int main(void)
 {
-        LOG_INF("Booted up\r\n");
+        LOG_INF("Booted up");
+        printk("XD\r\n");
 
         int ret;
 
@@ -52,13 +54,14 @@ int main(void)
         {
                 led_off(leds, i);
         }
-        led_on(leds, 1U);
+        led_on(leds, 0U);
 
         // Do forever
         while (1)
         {
 
-                LOG_INF("WOKE UP\r\n");
+                LOG_INF("WOKE UP");
+                printk("LOL\r\n");
 
                 k_msleep(SLEEP_TIME_MS);
         }
