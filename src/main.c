@@ -31,11 +31,20 @@ static const struct device *leds = NPM13XX_DEVICE(leds);
 static const struct device *regulators = NPM13XX_DEVICE(regulators);
 static const struct device *ldsw = NPM13XX_DEVICE(hall_pwr);
 
+void turn_on_one_led(uint8_t led)
+{
+        for (uint32_t i = 0; i <= 2; i++)
+        {
+                led_off(leds, i);
+        }
+        led_on(leds, led);
+}
+
 int main(void)
 {
         printk("APP: main() entered\n");
 
-        LOG_DBG("Booted up");
+        LOG_INF("Booted up");
 
         int ret;
 
@@ -70,54 +79,50 @@ int main(void)
 
         lv_init();
 
-        LOG_DBG("INITIALIZED LVGL");
+        LOG_INF("INITIALIZED LVGL");
 
         if (display_blanking_off(display))
         {
-                LOG_DBG("Failed to turn off display blanking!");
+                LOG_INF("Failed to turn off display blanking!");
                 return 0;
         }
-        LOG_DBG("Display blanking is off. Screen should be cleared by full refresh.");
+        LOG_INF("Display blanking is off. Screen should be cleared by full refresh.");
 
-        for (uint32_t i = 0; i <= 2; i++)
-        {
-                led_off(leds, i);
-        }
-        led_on(leds, 0U);
+        turn_on_one_led(0);
 
         k_msleep(2000);
 
         lv_obj_t *scr = lv_scr_act();
 
-        // // Get display width and height (for layout)
-        // lv_disp_t *disp = lv_disp_get_default();
-        // lv_coord_t width = lv_disp_get_hor_res(disp);
-        // lv_coord_t height = lv_disp_get_ver_res(disp);
-        // LOG_DBG("Display width: %d, height: %d", width, height);
+        // Get display width and height (for layout)
+        lv_disp_t *disp = lv_disp_get_default();
+        lv_coord_t width = lv_disp_get_hor_res(disp);
+        lv_coord_t height = lv_disp_get_ver_res(disp);
+        LOG_INF("Display width: %d, height: %d", width, height);
 
-        // LOG_DBG("\n\ngoing to sleep");
+        /* Make the whole screen white */
+        lv_obj_set_style_bg_color(scr, lv_color_white(), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
 
-        // k_msleep(20000);
+        /* Force a redraw */
+        lv_obj_invalidate(scr);
+        lv_refr_now(NULL);
 
-        // LOG_DBG("woke up from long sssss");
-
+        // Create hello world label
         lv_obj_t *label;
         label = lv_label_create(scr);
         lv_obj_set_style_text_color(label, lv_color_black(), LV_STATE_DEFAULT);
-        lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 5);
+        lv_obj_set_style_text_font(label, &lv_font_montserrat_12, LV_STATE_DEFAULT);
+        lv_obj_align(label, LV_ALIGN_CENTER, 0, 5);
         lv_label_set_text(label, "Hello, World!");
-        LOG_DBG("Set epd text\n");
+        LOG_INF("Set epd text\n");
 
-        for (uint32_t i = 0; i <= 2; i++)
-        {
-                led_off(leds, i);
-        }
-        led_on(leds, 2U);
+        turn_on_one_led(2);
 
         // Do forever
         while (1)
         {
-                LOG_DBG("WOKE UP");
+                LOG_INF("WOKE UP");
 
                 // Must be called periodically
                 lv_task_handler();
