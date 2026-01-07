@@ -46,6 +46,7 @@
     };
 
     mipi_dbi {
+        status = "disabled";
         compatible = "zephyr,mipi-dbi-spi";
         spi-dev = <&spi2>;
 
@@ -56,8 +57,8 @@
         #size-cells = <0>;
 
         epd: ssd16xx@0 {
-            status = "okay";
-            compatible = "solomon,ssd1681";
+            status = "disabled";
+            compatible = "gooddisplay,gdeh0154a07", "solomon,ssd1681";
             mipi-max-frequency = <4000000>;
             reg = <0>;
 
@@ -67,6 +68,8 @@
             rotation = <270>;
 
             busy-gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
+
+            tssv = <0x80>;
 
             full {
                 border-waveform = <0x05>;

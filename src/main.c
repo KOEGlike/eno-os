@@ -3,8 +3,12 @@
 #include <zephyr/devicetree.h>
 
 #include <zephyr/logging/log.h>
-#include <zephyr/logging/log_ctrl.h> /* LOG_PANIC(), log_panic() */
 #include <zephyr/sys/printk.h>
+#include <zephyr/logging/log_ctrl.h> /* LOG_PANIC(), log_panic() */
+#include <zephyr/drivers/led.h>
+#include <zephyr/drivers/mfd/npm13xx.h>
+#include <zephyr/drivers/regulator.h>
+#include <zephyr/drivers/sensor.h>
 
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/display.h>
@@ -118,12 +122,13 @@ int main(void)
         // Do forever
         while (1)
         {
-                LOG_INF("WOKE UP");
 
-                // Must be called periodically
-                lv_task_handler();
+                LOG_INF("WOKE UP ON");
+                led_on(leds, 0U);
+                k_msleep(SLEEP_TIME_MS);
 
-                // Sleep
+                LOG_INF("WOKE UP OFF");
+                led_off(leds, 0U);
                 k_msleep(SLEEP_TIME_MS);
         }
 }
