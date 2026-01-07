@@ -60,8 +60,11 @@
             compatible = "solomon,ssd1681";
             mipi-max-frequency = <4000000>;
             reg = <0>;
+
             width = <200>;
             height = <200>;
+
+            rotation = <270>;
 
             busy-gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
 

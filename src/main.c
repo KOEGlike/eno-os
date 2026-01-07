@@ -104,10 +104,6 @@ int main(void)
         lv_obj_set_style_bg_color(scr, lv_color_white(), LV_PART_MAIN);
         lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
 
-        /* Force a redraw */
-        lv_obj_invalidate(scr);
-        lv_refr_now(NULL);
-
         // Create hello world label
         lv_obj_t *label;
         label = lv_label_create(scr);
