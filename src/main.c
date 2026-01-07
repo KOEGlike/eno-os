@@ -50,19 +50,23 @@ int main(void)
                 LOG_ERR("Error: led device is not ready\n");
                 return -1;
         }
+
+        // turn off all of the LEDs
         for (uint32_t i = 0; i <= 2; i++)
         {
                 led_off(leds, i);
         }
-        led_on(leds, 0U);
 
         // Do forever
         while (1)
         {
 
-                LOG_INF("WOKE UP");
-                printk("LOL\r\n");
+                LOG_INF("WOKE UP ON");
+                led_on(leds, 0U);
+                k_msleep(SLEEP_TIME_MS);
 
+                LOG_INF("WOKE UP OFF");
+                led_off(leds, 0U);
                 k_msleep(SLEEP_TIME_MS);
         }
 }
