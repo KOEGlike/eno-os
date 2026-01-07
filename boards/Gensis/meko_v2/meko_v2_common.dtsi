@@ -48,7 +48,7 @@
     mipi_dbi {
         status = "disabled";
         compatible = "zephyr,mipi-dbi-spi";
-        spi-dev = <&spi1>;
+        spi-dev = <&spi2>;
 
         dc-gpios = <&gpio0  14 GPIO_ACTIVE_HIGH>;
         reset-gpios = <&gpio0 12 GPIO_ACTIVE_LOW>;
@@ -61,8 +61,11 @@
             compatible = "gooddisplay,gdeh0154a07", "solomon,ssd1681";
             mipi-max-frequency = <4000000>;
             reg = <0>;
+
             width = <200>;
             height = <200>;
+
+            rotation = <270>;
 
             busy-gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
 
@@ -101,11 +104,11 @@
     load-capacitance-picofarad = <7>;
 };
 
-&spi1 {
+&spi2 {
     compatible = "nordic,nrf-spim";
-    status = "disabled";
-    pinctrl-0 = <&spi1_default>;
-    pinctrl-1 = <&spi1_sleep>;
+    status = "okay";
+    pinctrl-0 = <&spi2_default>;
+    pinctrl-1 = <&spi2_sleep>;
     pinctrl-names = "default", "sleep";
     cs-gpios = <&gpio0 16 GPIO_ACTIVE_LOW>;
 };
