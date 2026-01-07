@@ -114,7 +114,7 @@ int main(void)
         lv_obj_set_style_text_color(label, lv_color_black(), LV_STATE_DEFAULT);
         lv_obj_set_style_text_font(label, &lv_font_montserrat_12, LV_STATE_DEFAULT);
         lv_obj_align(label, LV_ALIGN_CENTER, 0, 5);
-        lv_label_set_text(label, "Hello, World!");
+        lv_label_set_text(label, "Hellooo, World!");
         LOG_INF("Set epd text\n");
 
         turn_on_one_led(2);
@@ -124,11 +124,7 @@ int main(void)
         {
 
                 LOG_INF("WOKE UP ON");
-                led_on(leds, 0U);
-                k_msleep(SLEEP_TIME_MS);
-
-                LOG_INF("WOKE UP OFF");
-                led_off(leds, 0U);
+                lv_task_handler();
                 k_msleep(SLEEP_TIME_MS);
         }
 }
