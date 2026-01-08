@@ -94,7 +94,7 @@ int main(void)
 
         turn_on_one_led(0);
 
-        k_msleep(1000);
+        k_msleep(2000);
 
         lv_obj_t *scr = lv_scr_act();
 
@@ -105,20 +105,17 @@ int main(void)
         LOG_INF("Display width: %d, height: %d", width, height);
 
         /* Make the whole screen white */
-        lv_obj_set_style_bg_color(scr, lv_color_black(), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(scr, lv_color_white(), LV_PART_MAIN);
         lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
 
-        lv_obj_invalidate(scr);
-        lv_refr_now(NULL);
-
         // Create hello world label
-        // lv_obj_t *label;
-        // label = lv_label_create(scr);
-        // lv_obj_set_style_text_color(label, lv_color_black(), LV_STATE_DEFAULT);
-        // lv_obj_set_style_text_font(label, &lv_font_montserrat_12, LV_STATE_DEFAULT);
-        // lv_obj_align(label, LV_ALIGN_CENTER, 0, 5);
-        // lv_label_set_text(label, "Hellooo, World!");
-        // LOG_INF("Set epd text\n");
+        lv_obj_t *label;
+        label = lv_label_create(scr);
+        lv_obj_set_style_text_color(label, lv_color_black(), LV_STATE_DEFAULT);
+        lv_obj_set_style_text_font(label, &lv_font_montserrat_12, LV_STATE_DEFAULT);
+        lv_obj_align(label, LV_ALIGN_CENTER, 0, 5);
+        lv_label_set_text(label, "Hellooo, World!");
+        LOG_INF("Set epd text\n");
 
         turn_on_one_led(2);
 
