@@ -21,10 +21,11 @@
 
 LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
 
-#define SLEEP_TIME_MS 200
-
 #define MOTOR_NODE DT_NODELABEL(motor)
 static const struct gpio_dt_spec motor = GPIO_DT_SPEC_GET(MOTOR_NODE, motor_gpios);
+
+#define AS5600_NODE DT_NODELABEL(as5600)
+static const struct device *as5600 = DEVICE_DT_GET(AS5600_NODE);
 
 // #define DISPLAY_NODE DT_CHOSEN(zephyr_display)
 // static const struct device *display = DEVICE_DT_GET(DISPLAY_NODE);
@@ -57,6 +58,12 @@ int main(void)
                 LOG_ERR("motor.port not ready: %s", motor.port ? motor.port->name : "(null)");
                 LOG_PANIC();
                 return -1;
+        }
+
+        if (!device_is_ready(as5600))
+        {
+                LOG_ERR("AS5600 device not ready");
+                return 0;
         }
 
         // if (!device_is_ready(display))
@@ -117,7 +124,7 @@ int main(void)
         // lv_label_set_text(label, "Hellooo, World!");
         // LOG_INF("Set epd text\n");
 
-        // turn_on_one_led(2);
+        turn_on_one_led(0);
 
         // Do forever
         while (1)
@@ -125,6 +132,30 @@ int main(void)
 
                 LOG_INF("WOKE UP ON");
                 // lv_task_handler();
-                k_msleep(SLEEP_TIME_MS);
+
+                int ret = sensor_sample_fetch(as5600);
+                if (ret)
+                {
+                        LOG_ERR("sensor_sample_fetch failed: %d", ret);
+                        k_msleep(1);
+
+                        continue;
+                }
+
+                struct sensor_value angle;
+
+                ret = sensor_channel_get(as5600, SENSOR_CHAN_ROTATION, &angle);
+
+                if (ret)
+                {
+                        LOG_ERR("sensor_channel_get failed: %d", ret);
+                }
+                else
+                {
+                        /* sensor_value is fixed-point: val1 + val2*1e-6 in the channel's unit */
+                        LOG_INF("Angle: %d.%06d", angle.val1, angle.val2);
+                }
+
+                k_msleep(1);
         }
 }
