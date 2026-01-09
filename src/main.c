@@ -17,7 +17,7 @@
 #include <zephyr/drivers/regulator.h>
 #include <zephyr/drivers/sensor.h>
 
-#include <lvgl.h>
+// #include <lvgl.h>
 
 LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
 
@@ -26,8 +26,8 @@ LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
 #define MOTOR_NODE DT_NODELABEL(motor)
 static const struct gpio_dt_spec motor = GPIO_DT_SPEC_GET(MOTOR_NODE, motor_gpios);
 
-#define DISPLAY_NODE DT_CHOSEN(zephyr_display)
-static const struct device *display = DEVICE_DT_GET(DISPLAY_NODE);
+// #define DISPLAY_NODE DT_CHOSEN(zephyr_display)
+// static const struct device *display = DEVICE_DT_GET(DISPLAY_NODE);
 
 #define NPM13XX_DEVICE(dev) DEVICE_DT_GET(DT_NODELABEL(npm1300_##dev))
 static const struct device *pmic = NPM13XX_DEVICE(pmic);
@@ -59,12 +59,12 @@ int main(void)
                 return -1;
         }
 
-        if (!device_is_ready(display))
-        {
-                LOG_ERR("display not ready: %s", display ? display->name : "(null)");
-                LOG_PANIC();
-                return -1;
-        }
+        // if (!device_is_ready(display))
+        // {
+        //         LOG_ERR("display not ready: %s", display ? display->name : "(null)");
+        //         LOG_PANIC();
+        //         return -1;
+        // }
 
         if (!device_is_ready(leds))
         {
@@ -81,50 +81,50 @@ int main(void)
                 return -1;
         }
 
-        lv_init();
+        // lv_init();
 
         LOG_INF("INITIALIZED LVGL");
 
-        if (display_blanking_off(display))
-        {
-                LOG_INF("Failed to turn off display blanking!");
-                return 0;
-        }
-        LOG_INF("Display blanking is off. Screen should be cleared by full refresh.");
+        // if (display_blanking_off(display))
+        // {
+        //         LOG_INF("Failed to turn off display blanking!");
+        //         return 0;
+        // }
+        // LOG_INF("Display blanking is off. Screen should be cleared by full refresh.");
 
         turn_on_one_led(0);
 
-        k_msleep(2000);
+        // k_msleep(2000);
 
-        lv_obj_t *scr = lv_scr_act();
+        // lv_obj_t *scr = lv_scr_act();
 
-        // Get display width and height (for layout)
-        lv_disp_t *disp = lv_disp_get_default();
-        lv_coord_t width = lv_disp_get_hor_res(disp);
-        lv_coord_t height = lv_disp_get_ver_res(disp);
-        LOG_INF("Display width: %d, height: %d", width, height);
+        // // Get display width and height (for layout)
+        // lv_disp_t *disp = lv_disp_get_default();
+        // lv_coord_t width = lv_disp_get_hor_res(disp);
+        // lv_coord_t height = lv_disp_get_ver_res(disp);
+        // LOG_INF("Display width: %d, height: %d", width, height);
 
-        /* Make the whole screen white */
-        lv_obj_set_style_bg_color(scr, lv_color_white(), LV_PART_MAIN);
-        lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
+        // /* Make the whole screen white */
+        // lv_obj_set_style_bg_color(scr, lv_color_white(), LV_PART_MAIN);
+        // lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
 
-        // Create hello world label
-        lv_obj_t *label;
-        label = lv_label_create(scr);
-        lv_obj_set_style_text_color(label, lv_color_black(), LV_STATE_DEFAULT);
-        lv_obj_set_style_text_font(label, &lv_font_montserrat_12, LV_STATE_DEFAULT);
-        lv_obj_align(label, LV_ALIGN_CENTER, 0, 5);
-        lv_label_set_text(label, "Hellooo, World!");
-        LOG_INF("Set epd text\n");
+        // // Create hello world label
+        // lv_obj_t *label;
+        // label = lv_label_create(scr);
+        // lv_obj_set_style_text_color(label, lv_color_black(), LV_STATE_DEFAULT);
+        // lv_obj_set_style_text_font(label, &lv_font_montserrat_12, LV_STATE_DEFAULT);
+        // lv_obj_align(label, LV_ALIGN_CENTER, 0, 5);
+        // lv_label_set_text(label, "Hellooo, World!");
+        // LOG_INF("Set epd text\n");
 
-        turn_on_one_led(2);
+        // turn_on_one_led(2);
 
         // Do forever
         while (1)
         {
 
                 LOG_INF("WOKE UP ON");
-                lv_task_handler();
+                // lv_task_handler();
                 k_msleep(SLEEP_TIME_MS);
         }
 }

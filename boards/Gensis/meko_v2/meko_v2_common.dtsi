@@ -46,6 +46,7 @@
     };
 
     mipi_dbi {
+        status = "disabled";
         compatible = "zephyr,mipi-dbi-spi";
         spi-dev = <&spi2>;
 
@@ -56,8 +57,9 @@
         #size-cells = <0>;
 
         epd: ssd16xx@0 {
-            compatible = "gooddisplay,gdeh0154a07", "solomon,ssd1681";
-            mipi-max-frequency = <1000000>;
+            status = "disabled";
+            compatible = "solomon,ssd1681";
+            mipi-max-frequency = <500000>;
             reg = <0>;
 
             width = <200>;
