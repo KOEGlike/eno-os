@@ -104,6 +104,28 @@
     load-capacitance-picofarad = <7>;
 };
 
+&spi4 {
+    compatible = "nordic,nrf-spim";
+    status = "okay";
+    cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;
+    pinctrl-0 = <&spi4_default>;
+    pinctrl-1 = <&spi4_sleep>;
+    pinctrl-names = "default", "sleep";
+
+    sdhc0: sdhc@0 {
+        compatible = "zephyr,sdhc-spi-slot";
+        reg = <0>;
+        status = "okay";
+        spi-max-frequency = <8000000>;
+
+        sdmmc {
+            compatible = "zephyr,sdmmc-disk";
+            disk-name = "SD";
+            status = "okay";
+        };
+    };
+};
+
 &spi2 {
     compatible = "nordic,nrf-spim";
     status = "okay";

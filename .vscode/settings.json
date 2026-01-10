@@ -21,6 +21,8 @@
         "printk",
         "PSEL",
         "psels",
+        "sdhc",
+        "sdmmc",
         "SEGGER",
         "SPIM",
         "tssv",
