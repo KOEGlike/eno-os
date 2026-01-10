@@ -17,6 +17,8 @@
 #include <zephyr/drivers/regulator.h>
 #include <zephyr/drivers/sensor.h>
 
+#include "sd_card.h"
+
 // #include <lvgl.h>
 
 LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
@@ -88,9 +90,16 @@ int main(void)
                 return -1;
         }
 
+        ret = sd_card_init();
+        if (ret != -ENODEV && ret != 0)
+        {
+                LOG_ERR("Failed to initialize SD card");
+                return ret;
+        }
+
         // lv_init();
 
-        LOG_INF("INITIALIZED LVGL");
+        // LOG_INF("INITIALIZED LVGL");
 
         // if (display_blanking_off(display))
         // {
@@ -124,7 +133,20 @@ int main(void)
         // lv_label_set_text(label, "Hellooo, World!");
         // LOG_INF("Set epd text\n");
 
-        turn_on_one_led(0);
+        char buf[512];
+        memset(buf, 0, sizeof(buf)); // <-- ensure empty string if nothing is written
+        size_t buf_size = sizeof(buf);
+
+        ret = sd_card_list_files(NULL, buf, &buf_size, true);
+        if (ret)
+        {
+                LOG_ERR("sd_card_list_files failed: %d", ret);
+                return ret;
+        }
+
+        buf[sizeof(buf) - 1] = '\0'; // <-- hard stop in case callee forgot
+        LOG_INF("SD list (%u bytes cap, size now %u):\n%s",
+                (unsigned)sizeof(buf), (unsigned)buf_size, buf);
 
         // Do forever
         while (1)
@@ -133,29 +155,44 @@ int main(void)
                 LOG_INF("WOKE UP ON");
                 // lv_task_handler();
 
-                int ret = sensor_sample_fetch(as5600);
+                // int ret = sensor_sample_fetch(as5600);
+                // if (ret)
+                // {
+                //         LOG_ERR("sensor_sample_fetch failed: %d", ret);
+                //         k_msleep(1);
+
+                //         continue;
+                // }
+
+                // struct sensor_value angle;
+
+                // ret = sensor_channel_get(as5600, SENSOR_CHAN_ROTATION, &angle);
+
+                // if (ret)
+                // {
+                //         LOG_ERR("sensor_channel_get failed: %d", ret);
+                // }
+                // else
+                // {
+                //         /* sensor_value is fixed-point: val1 + val2*1e-6 in the channel's unit */
+                //         LOG_INF("Angle: %d.%06d", angle.val1, angle.val2);
+                // }
+
+                char buf[512];
+                memset(buf, 0, sizeof(buf)); // <-- ensure empty string if nothing is written
+                size_t buf_size = sizeof(buf);
+
+                ret = sd_card_list_files(NULL, buf, &buf_size, true);
                 if (ret)
                 {
-                        LOG_ERR("sensor_sample_fetch failed: %d", ret);
-                        k_msleep(1);
-
-                        continue;
+                        LOG_ERR("sd_card_list_files failed: %d", ret);
+                        return ret;
                 }
 
-                struct sensor_value angle;
+                buf[sizeof(buf) - 1] = '\0'; // <-- hard stop in case callee forgot
+                LOG_INF("SD list (%u bytes cap, size now %u):\n%s",
+                        (unsigned)sizeof(buf), (unsigned)buf_size, buf);
 
-                ret = sensor_channel_get(as5600, SENSOR_CHAN_ROTATION, &angle);
-
-                if (ret)
-                {
-                        LOG_ERR("sensor_channel_get failed: %d", ret);
-                }
-                else
-                {
-                        /* sensor_value is fixed-point: val1 + val2*1e-6 in the channel's unit */
-                        LOG_INF("Angle: %d.%06d", angle.val1, angle.val2);
-                }
-
-                k_msleep(1);
+                k_msleep(3000);
         }
 }
