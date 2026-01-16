@@ -1,0 +1,17 @@
+manifest:
+  remotes:
+    - name: ncs
+      url-base: https://github.com/nrfconnect
+  
+  projects:
+    # Import the nRF Connect SDK manifest. 
+    # This automatically brings in Zephyr, CMSIS, and other modules.
+    - name: nrf
+      remote: ncs
+      revision: v2.7.0  # Change this to the NCS version you want (e.g., v2.6.1, main)
+      import: true
+  
+  self:
+    # This defines where this repository (eno-os) will sit 
+    # relative to the workspace root.
+    path: eno-os
