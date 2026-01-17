@@ -1,15 +1,16 @@
 manifest:
   remotes:
+    # Define the Nordic remote source
     - name: ncs
       url-base: https://github.com/nrfconnect
-  
+
   projects:
-    # Import the nRF Connect SDK manifest. 
-    # This automatically brings in Zephyr, CMSIS, and other modules.
-    - name: nrf
+    # Import the official nRF Connect SDK manifest
+    - name: sdk-nrf
       remote: ncs
-      revision: v2.7.0  # Change this to the NCS version you want (e.g., v2.6.1, main)
-      import: true
+      path: nrf
+      revision: v3.2.1  # <--- LOCK YOUR VERSION HERE (e.g., v2.5.0, v2.7.0, main)
+      import: true       # This imports all sub-dependencies (zephyr, mbedtls, etc.)
   
   self:
     # This defines where this repository (eno-os) will sit 
