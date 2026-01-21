@@ -3,6 +3,8 @@ manifest:
     # Define the Nordic remote source
     - name: ncs
       url-base: https://github.com/nrfconnect
+    - name: koeg
+      url-base: https://github.com/KOEGlike
 
   projects:
     # Import the official nRF Connect SDK manifest
@@ -10,7 +12,12 @@ manifest:
       remote: ncs
       path: nrf
       revision: v3.2.1  # <--- LOCK YOUR VERSION HERE (e.g., v2.5.0, v2.7.0, main)
-      import: true       # This imports all sub-dependencies (zephyr, mbedtls, etc.)
+      import: true      # This imports all sub-dependencies (zephyr, mbedtls, etc.)
+
+    - name: tad5x12
+      remote: koeg
+      revision: main
+      path: modules/lib/tad5x12
   
   self:
     # This defines where this repository (eno-os) will sit 
