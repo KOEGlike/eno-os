@@ -11,6 +11,18 @@
         motor-gpios = <&gpio1 15 GPIO_ACTIVE_HIGH>;
     };
 
+    reg_my_sensor: regulator-3v3-sensor {
+        compatible = "regulator-fixed";
+        regulator-name = "sensor_supply";
+
+        regulator-min-microvolt = <3300000>;
+        regulator-max-microvolt = <3300000>;
+
+        enable-gpios = <&gpio1 9 GPIO_ACTIVE_HIGH>;
+
+        startup-delay-us = <1000>;
+    };
+
     buttons {
         compatible = "gpio-keys";
 
@@ -148,6 +160,12 @@
         reg = <0x36>;
 
         friendly-name = "hall rotation sensor";
+    };
+
+    tad5212: tad5212@50 {
+        compatible = "ti,tad5x12";
+        reg = <0x50>;
+        status = "okay";
     };
 
     npm1300_pmic: npm1300@6b {
