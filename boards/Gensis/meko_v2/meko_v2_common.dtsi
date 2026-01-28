@@ -11,7 +11,7 @@
         motor-gpios = <&gpio1 15 GPIO_ACTIVE_HIGH>;
     };
 
-    reg_my_sensor: regulator-3v3-sensor {
+    dac_avdd: dac-avdd {
         compatible = "regulator-fixed";
         regulator-name = "sensor_supply";
 
