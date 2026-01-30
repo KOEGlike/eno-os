@@ -17,11 +17,336 @@
 #include <zephyr/drivers/regulator.h>
 #include <zephyr/drivers/sensor.h>
 
+#include <zephyr/audio/codec.h>
+
 #include "sd_card.h"
 
 // #include <lvgl.h>
 
 LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
+
+static uint8_t __aligned(4) pcm_16k[] = {
+    0x01,
+    0x00,
+    0xFE,
+    0x17,
+    0x55,
+    0x2C,
+    0xEB,
+    0x39,
+    0xB1,
+    0x3E,
+    0xEC,
+    0x39,
+    0x55,
+    0x2C,
+    0xFE,
+    0x17,
+    0x01,
+    0x00,
+    0x02,
+    0xE8,
+    0xAC,
+    0xD3,
+    0x15,
+    0xC6,
+    0x4F,
+    0xC1,
+    0x15,
+    0xC6,
+    0xAC,
+    0xD3,
+    0x03,
+    0xE8,
+    0x00,
+    0x00,
+    0xFD,
+    0x17,
+    0x54,
+    0x2C,
+    0xEB,
+    0x39,
+    0xB1,
+    0x3E,
+    0xEC,
+    0x39,
+    0x54,
+    0x2C,
+    0xFE,
+    0x17,
+    0x00,
+    0x00,
+    0x02,
+    0xE8,
+    0xAB,
+    0xD3,
+    0x15,
+    0xC6,
+    0x4F,
+    0xC1,
+    0x15,
+    0xC6,
+    0xAC,
+    0xD3,
+    0x02,
+    0xE8,
+    0x00,
+    0x00,
+    0xFD,
+    0x17,
+    0x54,
+    0x2C,
+    0xEC,
+    0x39,
+    0xB1,
+    0x3E,
+    0xEB,
+    0x39,
+    0x55,
+    0x2C,
+    0xFE,
+    0x17,
+    0xFF,
+    0xFF,
+    0x03,
+    0xE8,
+    0xAB,
+    0xD3,
+    0x14,
+    0xC6,
+    0x4F,
+    0xC1,
+    0x14,
+    0xC6,
+    0xAB,
+    0xD3,
+    0x02,
+    0xE8,
+    0x00,
+    0x00,
+    0xFE,
+    0x17,
+    0x55,
+    0x2C,
+    0xEC,
+    0x39,
+    0xB1,
+    0x3E,
+    0xEC,
+    0x39,
+    0x54,
+    0x2C,
+    0xFD,
+    0x17,
+    0x01,
+    0x00,
+    0x02,
+    0xE8,
+    0xAC,
+    0xD3,
+    0x15,
+    0xC6,
+    0x4F,
+    0xC1,
+    0x15,
+    0xC6,
+    0xAB,
+    0xD3,
+    0x02,
+    0xE8,
+    0x00,
+    0x00,
+    0xFE,
+    0x17,
+    0x55,
+    0x2C,
+    0xEB,
+    0x39,
+    0xB1,
+    0x3E,
+    0xEB,
+    0x39,
+    0x54,
+    0x2C,
+    0xFD,
+    0x17,
+    0x00,
+    0x00,
+    0x02,
+    0xE8,
+    0xAC,
+    0xD3,
+    0x14,
+    0xC6,
+    0x50,
+    0xC1,
+    0x14,
+    0xC6,
+    0xAC,
+    0xD3,
+    0x02,
+    0xE8,
+    0x01,
+    0x00,
+    0xFE,
+    0x17,
+    0x54,
+    0x2C,
+    0xEB,
+    0x39,
+    0xB1,
+    0x3E,
+    0xEB,
+    0x39,
+    0x54,
+    0x2C,
+    0xFE,
+    0x17,
+    0x00,
+    0x00,
+    0x03,
+    0xE8,
+    0xAC,
+    0xD3,
+    0x14,
+    0xC6,
+    0x4F,
+    0xC1,
+    0x14,
+    0xC6,
+    0xAC,
+    0xD3,
+    0x02,
+    0xE8,
+    0x00,
+    0x00,
+    0xFD,
+    0x17,
+    0x55,
+    0x2C,
+    0xEB,
+    0x39,
+    0xB1,
+    0x3E,
+    0xEB,
+    0x39,
+    0x54,
+    0x2C,
+    0xFD,
+    0x17,
+    0x00,
+    0x00,
+    0x02,
+    0xE8,
+    0xAC,
+    0xD3,
+    0x14,
+    0xC6,
+    0x4F,
+    0xC1,
+    0x15,
+    0xC6,
+    0xAB,
+    0xD3,
+    0x02,
+    0xE8,
+    0x01,
+    0x00,
+    0xFD,
+    0x17,
+    0x55,
+    0x2C,
+    0xEB,
+    0x39,
+    0xB1,
+    0x3E,
+    0xEB,
+    0x39,
+    0x54,
+    0x2C,
+    0xFD,
+    0x17,
+    0x00,
+    0x00,
+    0x02,
+    0xE8,
+    0xAB,
+    0xD3,
+    0x14,
+    0xC6,
+    0x50,
+    0xC1,
+    0x15,
+    0xC6,
+    0xAB,
+    0xD3,
+    0x02,
+    0xE8,
+    0x00,
+    0x00,
+    0xFD,
+    0x17,
+    0x55,
+    0x2C,
+    0xEB,
+    0x39,
+    0xB1,
+    0x3E,
+    0xEC,
+    0x39,
+    0x54,
+    0x2C,
+    0xFE,
+    0x17,
+    0x00,
+    0x00,
+    0x02,
+    0xE8,
+    0xAB,
+    0xD3,
+    0x15,
+    0xC6,
+    0x4F,
+    0xC1,
+    0x14,
+    0xC6,
+    0xAC,
+    0xD3,
+    0x03,
+    0xE8,
+    0x00,
+    0x00,
+    0xFD,
+    0x17,
+    0x54,
+    0x2C,
+    0xEC,
+    0x39,
+    0xB2,
+    0x3E,
+    0xEB,
+    0x39,
+    0x54,
+    0x2C,
+    0xFE,
+    0x17,
+    0x00,
+    0x00,
+    0x02,
+    0xE8,
+    0xAB,
+    0xD3,
+    0x15,
+    0xC6,
+    0x4F,
+    0xC1,
+    0x14,
+    0xC6,
+    0xAB,
+    0xD3,
+    0x03,
+    0xE8,
+};
 
 #define MOTOR_NODE DT_NODELABEL(motor)
 static const struct gpio_dt_spec motor = GPIO_DT_SPEC_GET(MOTOR_NODE, motor_gpios);
@@ -55,18 +380,18 @@ int main(void)
 
         int ret;
 
-        if (!device_is_ready(motor.port))
-        {
-                LOG_ERR("motor.port not ready: %s", motor.port ? motor.port->name : "(null)");
-                LOG_PANIC();
-                return -1;
-        }
+        // if (!device_is_ready(motor.port))
+        // {
+        //         LOG_ERR("motor.port not ready: %s", motor.port ? motor.port->name : "(null)");
+        //         LOG_PANIC();
+        //         return -1;
+        // }
 
-        if (!device_is_ready(as5600))
-        {
-                LOG_ERR("AS5600 device not ready");
-                return 0;
-        }
+        // if (!device_is_ready(as5600))
+        // {
+        //         LOG_ERR("AS5600 device not ready");
+        //         return 0;
+        // }
 
         // if (!device_is_ready(display))
         // {
@@ -82,20 +407,20 @@ int main(void)
                 return -1;
         }
 
-        ret = gpio_pin_configure_dt(&motor, GPIO_OUTPUT_INACTIVE);
-        if (ret < 0)
-        {
-                LOG_ERR("gpio_pin_configure_dt(motor) failed: %d", ret);
-                LOG_PANIC();
-                return -1;
-        }
+        // ret = gpio_pin_configure_dt(&motor, GPIO_OUTPUT_INACTIVE);
+        // if (ret < 0)
+        // {
+        //         LOG_ERR("gpio_pin_configure_dt(motor) failed: %d", ret);
+        //         LOG_PANIC();
+        //         return -1;
+        // }
 
-        ret = sd_card_init();
-        if (ret != -ENODEV && ret != 0)
-        {
-                LOG_ERR("Failed to initialize SD card");
-                return ret;
-        }
+        // ret = sd_card_init();
+        // if (ret != -ENODEV && ret != 0)
+        // {
+        //         LOG_ERR("Failed to initialize SD card");
+        //         return ret;
+        // }
 
         // lv_init();
 
@@ -133,20 +458,20 @@ int main(void)
         // lv_label_set_text(label, "Hellooo, World!");
         // LOG_INF("Set epd text\n");
 
-        char buf[512];
-        memset(buf, 0, sizeof(buf)); // <-- ensure empty string if nothing is written
-        size_t buf_size = sizeof(buf);
+        // char buf[512];
+        // memset(buf, 0, sizeof(buf)); // <-- ensure empty string if nothing is written
+        // size_t buf_size = sizeof(buf);
 
-        ret = sd_card_list_files(NULL, buf, &buf_size, true);
-        if (ret)
-        {
-                LOG_ERR("sd_card_list_files failed: %d", ret);
-                return ret;
-        }
+        // ret = sd_card_list_files(NULL, buf, &buf_size, true);
+        // if (ret)
+        // {
+        //         LOG_ERR("sd_card_list_files failed: %d", ret);
+        //         return ret;
+        // }
 
-        buf[sizeof(buf) - 1] = '\0'; // <-- hard stop in case callee forgot
-        LOG_INF("SD list (%u bytes cap, size now %u):\n%s",
-                (unsigned)sizeof(buf), (unsigned)buf_size, buf);
+        // buf[sizeof(buf) - 1] = '\0'; // <-- hard stop in case callee forgot
+        // LOG_INF("SD list (%u bytes cap, size now %u):\n%s",
+        //         (unsigned)sizeof(buf), (unsigned)buf_size, buf);
 
         // Do forever
         while (1)
@@ -178,21 +503,21 @@ int main(void)
                 //         LOG_INF("Angle: %d.%06d", angle.val1, angle.val2);
                 // }
 
-                char buf[512];
-                memset(buf, 0, sizeof(buf)); // <-- ensure empty string if nothing is written
-                size_t buf_size = sizeof(buf);
+                // char buf[512];
+                // memset(buf, 0, sizeof(buf)); // <-- ensure empty string if nothing is written
+                // size_t buf_size = sizeof(buf);
 
-                ret = sd_card_list_files(NULL, buf, &buf_size, true);
-                if (ret)
-                {
-                        LOG_ERR("sd_card_list_files failed: %d", ret);
-                        return ret;
-                }
+                // ret = sd_card_list_files(NULL, buf, &buf_size, true);
+                // if (ret)
+                // {
+                //         LOG_ERR("sd_card_list_files failed: %d", ret);
+                //         return ret;
+                // }
 
-                buf[sizeof(buf) - 1] = '\0'; // <-- hard stop in case callee forgot
-                LOG_INF("SD list (%u bytes cap, size now %u):\n%s",
-                        (unsigned)sizeof(buf), (unsigned)buf_size, buf);
+                // buf[sizeof(buf) - 1] = '\0'; // <-- hard stop in case callee forgot
+                // LOG_INF("SD list (%u bytes cap, size now %u):\n%s",
+                //         (unsigned)sizeof(buf), (unsigned)buf_size, buf);
 
-                k_msleep(3000);
+                // k_msleep(3000);
         }
 }
