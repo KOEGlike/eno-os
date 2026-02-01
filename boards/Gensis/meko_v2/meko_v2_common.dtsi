@@ -21,6 +21,7 @@
         enable-gpios = <&gpio1 9 GPIO_ACTIVE_HIGH>;
 
         startup-delay-us = <1000>;
+        regulator-boot-on;
     };
 
     buttons {
@@ -164,8 +165,9 @@
 
     tad5212: tad5212@50 {
         compatible = "ti,tad5x12";
-        reg = <0x50>;
         status = "okay";
+
+        reg = <0x50>;
     };
 
     npm1300_pmic: npm1300@6b {
@@ -208,4 +210,12 @@
             };
         };
     };
+};
+
+&i2s0 {
+    compatible = "nordic,nrf-i2s";
+    status = "okay";
+    pinctrl-0 = <&i2s0_default>;
+    pinctrl-1 = <&i2s0_sleep>;
+    pinctrl-names = "default", "sleep";
 };

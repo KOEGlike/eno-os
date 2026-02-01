@@ -18,350 +18,75 @@
 #include <zephyr/drivers/sensor.h>
 
 #include <zephyr/audio/codec.h>
+#include <zephyr/drivers/i2s.h>
 
 #include "sd_card.h"
+#include "audio_snippet.h"
 
 // #include <lvgl.h>
 
 LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
 
-static uint8_t __aligned(4) pcm_16k[] = {
-    0x01,
-    0x00,
-    0xFE,
-    0x17,
-    0x55,
-    0x2C,
-    0xEB,
-    0x39,
-    0xB1,
-    0x3E,
-    0xEC,
-    0x39,
-    0x55,
-    0x2C,
-    0xFE,
-    0x17,
-    0x01,
-    0x00,
-    0x02,
-    0xE8,
-    0xAC,
-    0xD3,
-    0x15,
-    0xC6,
-    0x4F,
-    0xC1,
-    0x15,
-    0xC6,
-    0xAC,
-    0xD3,
-    0x03,
-    0xE8,
-    0x00,
-    0x00,
-    0xFD,
-    0x17,
-    0x54,
-    0x2C,
-    0xEB,
-    0x39,
-    0xB1,
-    0x3E,
-    0xEC,
-    0x39,
-    0x54,
-    0x2C,
-    0xFE,
-    0x17,
-    0x00,
-    0x00,
-    0x02,
-    0xE8,
-    0xAB,
-    0xD3,
-    0x15,
-    0xC6,
-    0x4F,
-    0xC1,
-    0x15,
-    0xC6,
-    0xAC,
-    0xD3,
-    0x02,
-    0xE8,
-    0x00,
-    0x00,
-    0xFD,
-    0x17,
-    0x54,
-    0x2C,
-    0xEC,
-    0x39,
-    0xB1,
-    0x3E,
-    0xEB,
-    0x39,
-    0x55,
-    0x2C,
-    0xFE,
-    0x17,
-    0xFF,
-    0xFF,
-    0x03,
-    0xE8,
-    0xAB,
-    0xD3,
-    0x14,
-    0xC6,
-    0x4F,
-    0xC1,
-    0x14,
-    0xC6,
-    0xAB,
-    0xD3,
-    0x02,
-    0xE8,
-    0x00,
-    0x00,
-    0xFE,
-    0x17,
-    0x55,
-    0x2C,
-    0xEC,
-    0x39,
-    0xB1,
-    0x3E,
-    0xEC,
-    0x39,
-    0x54,
-    0x2C,
-    0xFD,
-    0x17,
-    0x01,
-    0x00,
-    0x02,
-    0xE8,
-    0xAC,
-    0xD3,
-    0x15,
-    0xC6,
-    0x4F,
-    0xC1,
-    0x15,
-    0xC6,
-    0xAB,
-    0xD3,
-    0x02,
-    0xE8,
-    0x00,
-    0x00,
-    0xFE,
-    0x17,
-    0x55,
-    0x2C,
-    0xEB,
-    0x39,
-    0xB1,
-    0x3E,
-    0xEB,
-    0x39,
-    0x54,
-    0x2C,
-    0xFD,
-    0x17,
-    0x00,
-    0x00,
-    0x02,
-    0xE8,
-    0xAC,
-    0xD3,
-    0x14,
-    0xC6,
-    0x50,
-    0xC1,
-    0x14,
-    0xC6,
-    0xAC,
-    0xD3,
-    0x02,
-    0xE8,
-    0x01,
-    0x00,
-    0xFE,
-    0x17,
-    0x54,
-    0x2C,
-    0xEB,
-    0x39,
-    0xB1,
-    0x3E,
-    0xEB,
-    0x39,
-    0x54,
-    0x2C,
-    0xFE,
-    0x17,
-    0x00,
-    0x00,
-    0x03,
-    0xE8,
-    0xAC,
-    0xD3,
-    0x14,
-    0xC6,
-    0x4F,
-    0xC1,
-    0x14,
-    0xC6,
-    0xAC,
-    0xD3,
-    0x02,
-    0xE8,
-    0x00,
-    0x00,
-    0xFD,
-    0x17,
-    0x55,
-    0x2C,
-    0xEB,
-    0x39,
-    0xB1,
-    0x3E,
-    0xEB,
-    0x39,
-    0x54,
-    0x2C,
-    0xFD,
-    0x17,
-    0x00,
-    0x00,
-    0x02,
-    0xE8,
-    0xAC,
-    0xD3,
-    0x14,
-    0xC6,
-    0x4F,
-    0xC1,
-    0x15,
-    0xC6,
-    0xAB,
-    0xD3,
-    0x02,
-    0xE8,
-    0x01,
-    0x00,
-    0xFD,
-    0x17,
-    0x55,
-    0x2C,
-    0xEB,
-    0x39,
-    0xB1,
-    0x3E,
-    0xEB,
-    0x39,
-    0x54,
-    0x2C,
-    0xFD,
-    0x17,
-    0x00,
-    0x00,
-    0x02,
-    0xE8,
-    0xAB,
-    0xD3,
-    0x14,
-    0xC6,
-    0x50,
-    0xC1,
-    0x15,
-    0xC6,
-    0xAB,
-    0xD3,
-    0x02,
-    0xE8,
-    0x00,
-    0x00,
-    0xFD,
-    0x17,
-    0x55,
-    0x2C,
-    0xEB,
-    0x39,
-    0xB1,
-    0x3E,
-    0xEC,
-    0x39,
-    0x54,
-    0x2C,
-    0xFE,
-    0x17,
-    0x00,
-    0x00,
-    0x02,
-    0xE8,
-    0xAB,
-    0xD3,
-    0x15,
-    0xC6,
-    0x4F,
-    0xC1,
-    0x14,
-    0xC6,
-    0xAC,
-    0xD3,
-    0x03,
-    0xE8,
-    0x00,
-    0x00,
-    0xFD,
-    0x17,
-    0x54,
-    0x2C,
-    0xEC,
-    0x39,
-    0xB2,
-    0x3E,
-    0xEB,
-    0x39,
-    0x54,
-    0x2C,
-    0xFE,
-    0x17,
-    0x00,
-    0x00,
-    0x02,
-    0xE8,
-    0xAB,
-    0xD3,
-    0x15,
-    0xC6,
-    0x4F,
-    0xC1,
-    0x14,
-    0xC6,
-    0xAB,
-    0xD3,
-    0x03,
-    0xE8,
-};
+#define SAMPLE_FREQUENCY 16000
+#define SAMPLE_BIT_WIDTH 16
+#define BYTES_PER_SAMPLE 2
+#define NUMBER_OF_CHANNELS (2U) /* Such block length provides an echo with the delay of 100 ms. */
+#define SAMPLES_PER_BLOCK ((SAMPLE_FREQUENCY / 10) * NUMBER_OF_CHANNELS)
+#define INITIAL_BLOCKS 4
+#define TIMEOUT (2000U)
 
+#define BLOCK_SIZE (BYTES_PER_SAMPLE * SAMPLES_PER_BLOCK)
+#define BLOCK_COUNT (INITIAL_BLOCKS + 32)
+// Motor
 #define MOTOR_NODE DT_NODELABEL(motor)
 static const struct gpio_dt_spec motor = GPIO_DT_SPEC_GET(MOTOR_NODE, motor_gpios);
 
+// AS5600
 #define AS5600_NODE DT_NODELABEL(as5600)
 static const struct device *as5600 = DEVICE_DT_GET(AS5600_NODE);
 
 // #define DISPLAY_NODE DT_CHOSEN(zephyr_display)
 // static const struct device *display = DEVICE_DT_GET(DISPLAY_NODE);
 
+// PMIC
 #define NPM13XX_DEVICE(dev) DEVICE_DT_GET(DT_NODELABEL(npm1300_##dev))
 static const struct device *pmic = NPM13XX_DEVICE(pmic);
 static const struct device *leds = NPM13XX_DEVICE(leds);
 static const struct device *regulators = NPM13XX_DEVICE(regulators);
 static const struct device *ldsw = NPM13XX_DEVICE(hall_pwr);
+
+// DAC
+#define DAC_NODE DT_NODELABEL(tad5212)
+static const struct device *dac = DEVICE_DT_GET(DAC_NODE);
+
+K_MEM_SLAB_DEFINE_IN_SECT_STATIC(mem_slab, __nocache, BLOCK_SIZE, BLOCK_COUNT, 4);
+
+const struct audio_codec_cfg dac_cfg = {
+    .dai_route = AUDIO_ROUTE_PLAYBACK,
+    .dai_type = AUDIO_DAI_TYPE_I2S,
+    .dai_cfg.i2s.word_size = SAMPLE_BIT_WIDTH,
+    .dai_cfg.i2s.channels = 2,
+    .dai_cfg.i2s.format = I2S_FMT_DATA_FORMAT_I2S,
+    .dai_cfg.i2s.options = I2S_OPT_FRAME_CLK_SLAVE | I2S_OPT_BIT_CLK_SLAVE,
+    .dai_cfg.i2s.frame_clk_freq = SAMPLE_FREQUENCY,
+    .dai_cfg.i2s.mem_slab = &mem_slab,
+    .dai_cfg.i2s.block_size = BLOCK_SIZE,
+};
+
+// I2S
+#define I2S_NODE DT_NODELABEL(i2s0)
+static const struct device *i2s_dev = DEVICE_DT_GET(I2S_NODE);
+
+struct i2s_config audio_bus_config = {
+    .word_size = SAMPLE_BIT_WIDTH,
+    .channels = NUMBER_OF_CHANNELS,
+    .format = I2S_FMT_DATA_FORMAT_I2S,
+    .options = I2S_OPT_BIT_CLK_MASTER | I2S_OPT_FRAME_CLK_MASTER,
+    .frame_clk_freq = SAMPLE_FREQUENCY,
+    .mem_slab = &mem_slab,
+    .block_size = BLOCK_SIZE,
+    .timeout = TIMEOUT,
+};
 
 void turn_on_one_led(uint8_t led)
 {
@@ -378,7 +103,7 @@ int main(void)
 
         LOG_INF("Booted up");
 
-        int ret;
+        int ret = 0;
 
         // if (!device_is_ready(motor.port))
         // {
@@ -403,7 +128,33 @@ int main(void)
         if (!device_is_ready(leds))
         {
                 LOG_ERR("Error: led device is not ready\n");
-                LOG_PANIC();
+                return -1;
+        }
+
+        if (!device_is_ready(i2s_dev))
+        {
+                LOG_ERR("%s is not ready\n", i2s_dev->name);
+                return -1;
+        }
+
+        if (!device_is_ready(dac))
+        {
+                LOG_ERR("%s is not ready", dac->name);
+                return -1;
+        }
+
+        ret = audio_codec_configure(dac, &dac_cfg);
+        if (ret < 0)
+        {
+                LOG_ERR("audio_codec_configure failed: %d", ret);
+                return -1;
+        }
+        k_msleep(1000);
+
+        ret = i2s_configure(i2s_dev, I2S_DIR_TX, &audio_bus_config);
+        if (ret < 0)
+        {
+                LOG_ERR("i2s_configure failed: %d", ret);
                 return -1;
         }
 
@@ -518,6 +269,6 @@ int main(void)
                 // LOG_INF("SD list (%u bytes cap, size now %u):\n%s",
                 //         (unsigned)sizeof(buf), (unsigned)buf_size, buf);
 
-                // k_msleep(3000);
+                k_msleep(3000);
         }
 }
