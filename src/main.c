@@ -157,9 +157,10 @@ int main(void)
                 return -1;
         }
 
-        audio_codec_start_output(dac);
+        audio_codec_set_property(dac, AUDIO_PROPERTY_OUTPUT_VOLUME,
+                                 AUDIO_CHANNEL_ALL, (audio_property_value_t){.vol = 150}); // Volume: 0-255
 
-        audio_codec_set_property(dac, AUDIO_PROPERTY_OUTPUT_VOLUME, AUDIO_CHANNEL_ALL, (audio_property_value_t){.vol = 150}); // Volume: 0-255
+        audio_codec_start_output(dac);
 
         // ret = init_sd_card();
         // ret = init_lvgl();
