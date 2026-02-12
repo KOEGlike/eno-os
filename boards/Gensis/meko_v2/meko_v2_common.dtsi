@@ -59,7 +59,7 @@
     };
 
     mipi_dbi {
-        status = "disabled";
+        status = "okay";
         compatible = "zephyr,mipi-dbi-spi";
         spi-dev = <&spi2>;
 
@@ -70,7 +70,7 @@
         #size-cells = <0>;
 
         epd: ssd16xx@0 {
-            status = "disabled";
+            status = "okay";
             compatible = "solomon,ssd1681";
             mipi-max-frequency = <500000>;
             reg = <0>;

@@ -23,7 +23,8 @@
 #include "sd_card.h"
 #include "audio_snippet.h"
 
-// #include <lvgl.h>
+#include <lvgl.h>
+#include <lvgl_zephyr.h>
 
 LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
 
@@ -45,8 +46,8 @@ static const struct gpio_dt_spec motor = GPIO_DT_SPEC_GET(MOTOR_NODE, motor_gpio
 #define AS5600_NODE DT_NODELABEL(as5600)
 static const struct device *as5600 = DEVICE_DT_GET(AS5600_NODE);
 
-// #define DISPLAY_NODE DT_CHOSEN(zephyr_display)
-// static const struct device *display = DEVICE_DT_GET(DISPLAY_NODE);
+#define DISPLAY_NODE DT_CHOSEN(zephyr_display)
+static const struct device *display = DEVICE_DT_GET(DISPLAY_NODE);
 
 // PMIC
 #define NPM13XX_DEVICE(dev) DEVICE_DT_GET(DT_NODELABEL(npm1300_##dev))
@@ -111,6 +112,11 @@ static bool trigger_command(const struct device *i2s_dev_codec, enum i2s_trigger
         return true;
 }
 
+int init_display_device(void);
+int init_lvgl(void);
+void setup_lvgl_hello_screen(void);
+int configure_audio(void);
+
 int main(void)
 {
         printk("APP: main() entered\n");
@@ -121,7 +127,8 @@ int main(void)
 
         // ret = init_motor_device();
         // ret = init_as5600_device();
-        // ret = init_display_device();
+        ret = init_display_device();
+        ret = configure_audio();
 
         if (!device_is_ready(leds))
         {
@@ -130,6 +137,32 @@ int main(void)
         }
         turn_on_one_led(1);
 
+        // ret = init_sd_card();
+        ret = init_lvgl();
+        k_msleep(2000);
+        setup_lvgl_hello_screen();
+        // ret = log_sd_card_files_once();
+
+        LOG_INF("Starting audio playback");
+
+        turn_on_one_led(0);
+
+        // Do forever
+        while (1)
+        {
+
+                LOG_INF("WOKE UP ON");
+
+                // poll_as5600_angle();
+                // ret = log_sd_card_files_once();
+
+                k_msleep(3000);
+        }
+}
+
+int configure_audio() {
+        int ret = 0;
+        
         if (!device_is_ready(i2s_dev))
         {
                 LOG_ERR("%s is not ready\n", i2s_dev->name);
@@ -162,14 +195,12 @@ int main(void)
 
         audio_codec_start_output(dac);
 
-        // ret = init_sd_card();
-        // ret = init_lvgl();
-        // k_msleep(2000);
-        // setup_lvgl_hello_screen();
-        // ret = log_sd_card_files_once();
+        return 0;
 
-        LOG_INF("Starting audio playback");
+}
 
+int play_sine_wave() {
+        int ret = 0;
         for (;;)
         {
                 bool started = false;
@@ -216,21 +247,6 @@ int main(void)
                 LOG_INF("Streams stopped");
                 return 0;
         }
-
-        turn_on_one_led(0);
-
-        // Do forever
-        while (1)
-        {
-
-                LOG_INF("WOKE UP ON");
-                // lv_task_handler();
-
-                // poll_as5600_angle();
-                // ret = log_sd_card_files_once();
-
-                k_msleep(3000);
-        }
 }
 
 static int init_motor_device(void)
@@ -266,16 +282,15 @@ static int init_as5600_device(void)
         return 0;
 }
 
-static int init_display_device(void)
+int init_display_device(void)
 {
-#if 0
+
         if (!device_is_ready(display))
         {
                 LOG_ERR("display not ready: %s", display ? display->name : "(null)");
                 LOG_PANIC();
                 return -1;
         }
-#endif
         return 0;
 }
 
@@ -292,9 +307,9 @@ static int init_sd_card(void)
         return 0;
 }
 
-static int init_lvgl(void)
+int init_lvgl(void)
 {
-#if 0
+
         lv_init();
 
         LOG_INF("INITIALIZED LVGL");
@@ -305,13 +320,50 @@ static int init_lvgl(void)
                 return 0;
         }
         LOG_INF("Display blanking is off. Screen should be cleared by full refresh.");
-#endif
         return 0;
 }
 
-static void setup_lvgl_hello_screen(void)
+
+#define SCREEN_UPDATE_STACK_SIZE    2048
+K_THREAD_STACK_DEFINE(screen_update_stack, SCREEN_UPDATE_STACK_SIZE);
+static struct k_thread screen_update_thread_data;
+void update_screen_thread_func(void *arg1, void *arg2, void *arg3)
 {
-#if 0
+        lv_obj_t *label = (lv_obj_t *)arg1;
+        int counter = 0;
+        char buf[64];
+        while (1)
+        {
+                snprintf(buf, sizeof(buf), "Hellooo, World!\n Counter: %d", counter++);
+                lvgl_lock();
+                lv_label_set_text(label, buf);
+                lvgl_unlock();
+                LOG_INF("Updated label text: %s", buf);
+                k_msleep(2000);
+        }
+}
+
+#define LVGL_TASK_HANDLER_STACK_SIZE 4096
+K_THREAD_STACK_DEFINE(lvgl_task_handler_stack, LVGL_TASK_HANDLER_STACK_SIZE);
+static struct k_thread lvgl_task_handler_thread_data;
+void lvgl_task_handler_thread_func(void *arg1, void *arg2, void *arg3)
+{
+        uint32_t log_counter = 0;
+        while (1)
+        {
+                lvgl_lock();
+                lv_task_handler();
+                lvgl_unlock();
+                if ((log_counter++ % 200U) == 0U)
+                {
+                        LOG_INF("Called lv_task_handler");
+                }
+                k_msleep(5);
+        }
+}
+
+void setup_lvgl_hello_screen(void)
+{
         lv_obj_t *scr = lv_scr_act();
 
         // Get display width and height (for layout)
@@ -332,7 +384,13 @@ static void setup_lvgl_hello_screen(void)
         lv_obj_align(label, LV_ALIGN_CENTER, 0, 5);
         lv_label_set_text(label, "Hellooo, World!");
         LOG_INF("Set epd text\n");
-#endif
+
+        // Create a thread to update the label text every 2 seconds
+        k_thread_create(&screen_update_thread_data, screen_update_stack, SCREEN_UPDATE_STACK_SIZE,
+                        update_screen_thread_func, label, NULL, NULL, K_PRIO_PREEMPT(1), 0, K_NO_WAIT);
+        // Create a thread to call lv_task_handler periodically
+        k_thread_create(&lvgl_task_handler_thread_data, lvgl_task_handler_stack, LVGL_TASK_HANDLER_STACK_SIZE,
+                        lvgl_task_handler_thread_func, NULL, NULL, NULL, K_PRIO_PREEMPT(1), 0, K_NO_WAIT);
 }
 
 static int log_sd_card_files_once(void)
