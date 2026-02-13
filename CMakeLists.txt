@@ -13,6 +13,11 @@ project(eno-os)
 
 target_sources(app PRIVATE 
   src/main.c
-  src/sd_card.c
+  src/encoder.c
   src/audio_snippet.h
+  lib/sd_card.c
+)
+
+target_include_directories(app PRIVATE
+  ${CMAKE_CURRENT_LIST_DIR}/lib
 )

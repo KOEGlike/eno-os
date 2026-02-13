@@ -3,12 +3,6 @@
 #include <zephyr/devicetree.h>
 
 #include <zephyr/logging/log.h>
-#include <zephyr/sys/printk.h>
-#include <zephyr/logging/log_ctrl.h> /* LOG_PANIC(), log_panic() */
-#include <zephyr/drivers/led.h>
-#include <zephyr/drivers/mfd/npm13xx.h>
-#include <zephyr/drivers/regulator.h>
-#include <zephyr/drivers/sensor.h>
 
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/display.h>
@@ -41,10 +35,6 @@ LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
 // Motor
 #define MOTOR_NODE DT_NODELABEL(motor)
 static const struct gpio_dt_spec motor = GPIO_DT_SPEC_GET(MOTOR_NODE, motor_gpios);
-
-// AS5600
-#define AS5600_NODE DT_NODELABEL(as5600)
-static const struct device *as5600 = DEVICE_DT_GET(AS5600_NODE);
 
 #define DISPLAY_NODE DT_CHOSEN(zephyr_display)
 static const struct device *display = DEVICE_DT_GET(DISPLAY_NODE);
@@ -160,9 +150,10 @@ int main(void)
         }
 }
 
-int configure_audio() {
+int configure_audio()
+{
         int ret = 0;
-        
+
         if (!device_is_ready(i2s_dev))
         {
                 LOG_ERR("%s is not ready\n", i2s_dev->name);
@@ -196,10 +187,10 @@ int configure_audio() {
         audio_codec_start_output(dac);
 
         return 0;
-
 }
 
-int play_sine_wave() {
+int play_sine_wave()
+{
         int ret = 0;
         for (;;)
         {
@@ -255,7 +246,6 @@ static int init_motor_device(void)
         if (!device_is_ready(motor.port))
         {
                 LOG_ERR("motor.port not ready: %s", motor.port ? motor.port->name : "(null)");
-                LOG_PANIC();
                 return -1;
         }
 
@@ -263,20 +253,7 @@ static int init_motor_device(void)
         if (ret < 0)
         {
                 LOG_ERR("gpio_pin_configure_dt(motor) failed: %d", ret);
-                LOG_PANIC();
                 return -1;
-        }
-#endif
-        return 0;
-}
-
-static int init_as5600_device(void)
-{
-#if 0
-        if (!device_is_ready(as5600))
-        {
-                LOG_ERR("AS5600 device not ready");
-                return 0;
         }
 #endif
         return 0;
@@ -288,7 +265,6 @@ int init_display_device(void)
         if (!device_is_ready(display))
         {
                 LOG_ERR("display not ready: %s", display ? display->name : "(null)");
-                LOG_PANIC();
                 return -1;
         }
         return 0;
@@ -323,8 +299,7 @@ int init_lvgl(void)
         return 0;
 }
 
-
-#define SCREEN_UPDATE_STACK_SIZE    2048
+#define SCREEN_UPDATE_STACK_SIZE 2048
 K_THREAD_STACK_DEFINE(screen_update_stack, SCREEN_UPDATE_STACK_SIZE);
 static struct k_thread screen_update_thread_data;
 void update_screen_thread_func(void *arg1, void *arg2, void *arg3)
@@ -412,31 +387,4 @@ static int log_sd_card_files_once(void)
                 (unsigned)sizeof(buf), (unsigned)buf_size, buf);
 #endif
         return 0;
-}
-
-static void poll_as5600_angle(void)
-{
-#if 0
-        int ret = sensor_sample_fetch(as5600);
-        if (ret)
-        {
-                LOG_ERR("sensor_sample_fetch failed: %d", ret);
-                k_msleep(1);
-                return;
-        }
-
-        struct sensor_value angle;
-
-        ret = sensor_channel_get(as5600, SENSOR_CHAN_ROTATION, &angle);
-
-        if (ret)
-        {
-                LOG_ERR("sensor_channel_get failed: %d", ret);
-        }
-        else
-        {
-                /* sensor_value is fixed-point: val1 + val2*1e-6 in the channel's unit */
-                LOG_INF("Angle: %d.%06d", angle.val1, angle.val2);
-        }
-#endif
 }
