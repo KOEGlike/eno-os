@@ -12,36 +12,44 @@ LOG_MODULE_REGISTER(ENCODER, LOG_LEVEL_DBG);
 #define AS5600_NODE DT_NODELABEL(as5600)
 static const struct device *as5600 = DEVICE_DT_GET(AS5600_NODE);
 
-void log_encoder_thread_func(void *arg1, void *arg2, void *arg3)
+int get_encoder_angle(struct sensor_value *angle)
 {
     if (!device_is_ready(as5600))
     {
         LOG_ERR("AS5600 device not ready");
-        return;
+        return -ENODEV;
     }
 
+    int ret = sensor_sample_fetch(as5600);
+    if (ret)
+    {
+        LOG_ERR("sensor_sample_fetch failed: %d", ret);
+        return ret;
+    }
+
+    ret = sensor_channel_get(as5600, SENSOR_CHAN_ROTATION, angle);
+    if (ret)
+    {
+        LOG_ERR("sensor_channel_get failed: %d", ret);
+        return ret;
+    }
+
+    return 0;
+}
+
+void log_encoder_thread_func(void *arg1, void *arg2, void *arg3)
+{
     while (1)
     {
-        int ret = sensor_sample_fetch(as5600);
-        if (ret)
-        {
-            LOG_ERR("sensor_sample_fetch failed: %d", ret);
-            k_msleep(1);
-            return;
-        }
-
         struct sensor_value angle;
-
-        ret = sensor_channel_get(as5600, SENSOR_CHAN_ROTATION, &angle);
-
-        if (ret)
+        int ret = get_encoder_angle(&angle);
+        if (ret == 0)
         {
-            LOG_ERR("sensor_channel_get failed: %d", ret);
+            LOG_INF("Encoder angle: %d.%06d degrees", angle.val1, angle.val2);
         }
         else
         {
-            /* sensor_value is fixed-point: val1 + val2*1e-6 in the channel's unit */
-            LOG_INF("Angle: %d.%06d", angle.val1, angle.val2);
+            LOG_ERR("Failed to get encoder angle: %d", ret);
         }
         k_msleep(100);
     }

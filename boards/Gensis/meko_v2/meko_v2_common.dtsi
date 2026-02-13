@@ -7,8 +7,17 @@
         zephyr,display=&epd;
     };
 
-    motor: zephyr,user {
-        motor-gpios = <&gpio1 15 GPIO_ACTIVE_HIGH>;
+    aliases {
+        vib-motor = &vib_motor;
+    };
+
+    pwm_motor_driver {
+        compatible = "pwm-leds";
+
+        vib_motor: vib_motor {
+            pwms = <&pwm0 1 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
+            label = "Vibration Motor";
+        };
     };
 
     dac_avdd: dac-avdd {
@@ -26,6 +35,8 @@
 
     buttons {
         compatible = "gpio-keys";
+
+        debounce-interval-ms = <50>;
 
         button_power: button-0 {
             gpios = <&gpio0 27 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
@@ -93,6 +104,13 @@
             };
         };
     };
+};
+
+&pwm0 {
+    status = "okay";
+    pinctrl-0 = <&pwm0_default>;
+    pinctrl-1 = <&pwm0_sleep>;
+    pinctrl-names = "default", "sleep";
 };
 
 &gpio0 {
