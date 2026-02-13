@@ -21,6 +21,5 @@
 
 	<fonts>
 		<!-- Add <bin> , <tiny_ttf>, <freetype> tags here -->
-		<bin name="font_medium" as_file="false" src_path="fonts/Montserrat_Medium.ttf" size="20" bpp="4" />
 	</fonts>
 </globals>
