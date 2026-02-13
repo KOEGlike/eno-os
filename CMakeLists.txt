@@ -7,8 +7,10 @@ endif()
 # Allow Zephyr to discover custom boards in this repository (eno-os/boards/*).
 list(APPEND BOARD_ROOT ${CMAKE_CURRENT_LIST_DIR})
 
-
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+
+add_subdirectory(ui_project)
+target_link_libraries(app PUBLIC lib-ui)
 
 project(eno-os)
 
