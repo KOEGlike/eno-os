@@ -24,6 +24,8 @@ void update_screen_thread_func(void *arg1, void *arg2, void *arg3)
 
     lv_init();
 
+    k_msleep(2000); // Give some time for the display to be ready before initializing LVGL
+
     LOG_INF("INITIALIZED LVGL");
 
     if (display_blanking_off(display))
@@ -63,7 +65,7 @@ void update_screen_thread_func(void *arg1, void *arg2, void *arg3)
         lv_label_set_text(label, buf);
         lvgl_unlock();
         LOG_INF("Updated label text: %s", buf);
-        k_msleep(2000);
+        k_msleep(300);
     }
 }
 K_THREAD_DEFINE(screen_update_thread, 2048, update_screen_thread_func, NULL, NULL, NULL, 7, 0, 0);

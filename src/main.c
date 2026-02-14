@@ -12,10 +12,6 @@
 
 LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
 
-// Motor
-#define MOTOR_NODE DT_NODELABEL(motor)
-static const struct gpio_dt_spec motor = GPIO_DT_SPEC_GET(MOTOR_NODE, motor_gpios);
-
 // PMIC
 #define NPM13XX_DEVICE(dev) DEVICE_DT_GET(DT_NODELABEL(npm1300_##dev))
 static const struct device *pmic = NPM13XX_DEVICE(pmic);
@@ -53,22 +49,5 @@ int main(void)
 
                 LOG_INF("WOKE UP ON");
                 k_msleep(3000);
-        }
-}
-
-static int init_motor_device(void)
-{
-        int ret;
-        if (!device_is_ready(motor.port))
-        {
-                LOG_ERR("motor.port not ready: %s", motor.port ? motor.port->name : "(null)");
-                return -1;
-        }
-
-        ret = gpio_pin_configure_dt(&motor, GPIO_OUTPUT_INACTIVE);
-        if (ret < 0)
-        {
-                LOG_ERR("gpio_pin_configure_dt(motor) failed: %d", ret);
-                return -1;
         }
 }

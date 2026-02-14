@@ -18,6 +18,7 @@ target_sources(app PRIVATE
   src/audio_snippet.h
   src/screen.c
   src/sd.c
+  src/motor.c
   lib/sd_card.c
 )
 

@@ -4,6 +4,8 @@
 
 #include <zephyr/logging/log.h>
 
+#include "sd_card.h"
+
 LOG_MODULE_REGISTER(SD, LOG_LEVEL_DBG);
 
 static int init_sd_card(void)

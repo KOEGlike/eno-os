@@ -166,4 +166,4 @@ void audio_thread_func(void *arg1, void *arg2, void *arg3)
     }
 }
 
-K_THREAD_DEFINE(audio_thread_id, 4096, audio_thread_func, NULL, NULL, NULL, 7, 0, 0);
+// K_THREAD_DEFINE(audio_thread_id, 4096, audio_thread_func, NULL, NULL, NULL, 7, 0, 0);
