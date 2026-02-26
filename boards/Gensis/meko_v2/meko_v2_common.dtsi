@@ -182,7 +182,8 @@
     };
 
     tad5212: tad5212@50 {
-        compatible = "ti,tad5x12";
+        // compatible = "ti,tad5x12";
+        compatible = "i2c-device";
         status = "okay";
 
         reg = <0x50>;

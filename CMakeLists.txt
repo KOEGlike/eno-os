@@ -15,6 +15,7 @@ target_sources(app PRIVATE
   src/main.c
   src/encoder.c
   src/audio.c
+  src/audio_without_driver.c
   src/audio_snippet.h
   src/screen.c
   src/sd.c

@@ -55,4 +55,4 @@ void log_encoder_thread_func(void *arg1, void *arg2, void *arg3)
     }
 }
 
-K_THREAD_DEFINE(log_encoder_thread_id, 1024, log_encoder_thread_func, NULL, NULL, NULL, 7, 0, 0);
+// K_THREAD_DEFINE(log_encoder_thread_id, 1024, log_encoder_thread_func, NULL, NULL, NULL, 7, 0, 0);
