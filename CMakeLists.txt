@@ -20,7 +20,9 @@ target_sources(app PRIVATE
   src/screen.c
   src/sd.c
   src/motor.c
+  src/npm1300_led.c
   lib/sd_card.c
+  lib/i2c_dac.c
 )
 
 target_include_directories(app PRIVATE

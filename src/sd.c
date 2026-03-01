@@ -51,4 +51,4 @@ void sd_card_thread_func(void *arg1, void *arg2, void *arg3)
     }
 }
 
-K_THREAD_DEFINE(sd_card_thread_id, 1024, sd_card_thread_func, NULL, NULL, NULL, 7, 0, 0);
+K_THREAD_DEFINE(sd_card_thread_id, 4096, sd_card_thread_func, NULL, NULL, NULL, 7, 0, 0);

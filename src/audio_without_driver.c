@@ -8,6 +8,8 @@
 #include <zephyr/drivers/i2s.h>
 #include <zephyr/drivers/i2c.h>
 
+#include "i2c_dac.c"
+
 #include "audio_snippet.h"
 #include "audio_without_driver.h"
 
@@ -62,33 +64,6 @@ static bool trigger_command(const struct device *i2s_dev_codec, enum i2s_trigger
 #define CFG_META_DELAY (254)
 #define CFG_META_BURST (253)
 
-// Example implementation.  Call like:
-//     transmit_registers(registers, sizeof(registers)/sizeof(registers[0]));
-void transmit_registers(cfg_reg *r, int n)
-{
-    int i = 0;
-    while (i < n)
-    {
-        switch (r[i].command)
-        {
-        case CFG_META_SWITCH:
-            // Used in legacy applications.  Ignored here.
-            break;
-        case CFG_META_DELAY:
-            k_msleep(r[i].param);
-            break;
-        case CFG_META_BURST:
-            i2c_write_dt(&dac, (unsigned char *)&r[i + 1], r[i].param);
-            i += (r[i].param / 2) + 1;
-            break;
-        default:
-            i2c_write_dt(&dac, (unsigned char *)&r[i], 2);
-            break;
-        }
-        i++;
-    }
-}
-
 int configure_audio()
 {
     int ret = 0;
@@ -105,7 +80,7 @@ int configure_audio()
         return -1;
     }
 
-    transmit_registers(registers, sizeof(registers) / sizeof(registers[0]));
+    transmit_registers(registers, sizeof(registers) / sizeof(registers[0]), &dac);
 
     k_msleep(1000);
 
