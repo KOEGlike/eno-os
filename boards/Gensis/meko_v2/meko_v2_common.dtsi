@@ -33,6 +33,14 @@
         regulator-boot-on;
     };
 
+    jack_det {
+        compatible = "gpio-keys";
+        jack_insert: jack_insert {
+            gpios = <&gpio0 25 (GPIO_PULL_UP | GPIO_ACTIVE_HIGH)>;
+            label = "Jack Detect";
+        };
+    };
+
     buttons {
         compatible = "gpio-keys";
 
