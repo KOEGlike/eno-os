@@ -10,7 +10,7 @@ LOG_MODULE_REGISTER(I2C_DAC, LOG_LEVEL_DBG);
 
 // Example implementation.  Call like:
 //     transmit_registers(registers, sizeof(registers)/sizeof(registers[0]));
-void transmit_registers(cfg_reg *r, int n, const struct device *dac)
+void transmit_registers(cfg_reg *r, int n, const struct i2c_dt_spec *dac)
 {
     int i = 0;
     while (i < n)
@@ -35,11 +35,11 @@ void transmit_registers(cfg_reg *r, int n, const struct device *dac)
     }
 }
 
-int initialize_dac(const struct device *dac)
+int initialize_dac(const struct i2c_dt_spec *dac)
 {
     if (!i2c_is_ready_dt(dac))
     {
-        LOG_ERR("%s is not ready", dac->name);
+        LOG_ERR("%s is not ready", dac->bus->name);
         return -1;
     }
 
@@ -48,11 +48,11 @@ int initialize_dac(const struct device *dac)
     return 0;
 }
 
-int power_on_dac(const struct device *dac)
+int power_on_dac(const struct i2c_dt_spec *dac)
 {
     if (!i2c_is_ready_dt(dac))
     {
-        LOG_ERR("%s is not ready", dac->name);
+        LOG_ERR("%s is not ready", dac->bus->name);
         return -1;
     }
 
@@ -61,11 +61,11 @@ int power_on_dac(const struct device *dac)
     return 0;
 }
 
-int power_off_dac(const struct device *dac)
+int power_off_dac(const struct i2c_dt_spec *dac)
 {
     if (!i2c_is_ready_dt(dac))
     {
-        LOG_ERR("%s is not ready", dac->name);
+        LOG_ERR("%s is not ready", dac->bus->name);
         return -1;
     }
 
