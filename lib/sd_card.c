@@ -454,7 +454,7 @@ int sd_card_open(char const *const filename, struct fs_file_t *f_seg_read_entry)
 
     strncat(abs_path_name, filename, available_path_space);
 
-    LOG_INF("abs path name:\t%s", abs_path_name);
+    LOG_INF("Opening SD file");
 
     fs_file_t_init(f_seg_read_entry);
 

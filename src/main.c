@@ -8,6 +8,10 @@
 
 #include "sd_card.h"
 
+/* DAC functions from lib/i2c_dac.c */
+extern int initialize_dac(const struct i2c_dt_spec *dac);
+extern int power_on_dac(const struct i2c_dt_spec *dac);
+
 LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
 
 /* DAC on I2C */
