@@ -13,14 +13,6 @@ project(eno-os)
 
 target_sources(app PRIVATE 
   src/main.c
-  src/encoder.c
-  src/audio.c
-  src/audio_without_driver.c
-  src/audio_snippet.h
-  src/screen.c
-  src/sd.c
-  src/motor.c
-  src/npm1300_led.c
   lib/sd_card.c
   lib/i2c_dac.c
 )
