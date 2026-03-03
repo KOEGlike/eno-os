@@ -45,7 +45,7 @@ static const struct gpio_dt_spec button_right = GPIO_DT_SPEC_GET(BUTTON_RIGHT_NO
 #define NUMBER_OF_CHANNELS 2
 #define SAMPLES_PER_BLOCK ((SAMPLE_FREQUENCY / 10) * NUMBER_OF_CHANNELS)
 #define INITIAL_BLOCKS 4
-#define TIMEOUT 0
+#define TIMEOUT 2000
 
 #define BLOCK_SIZE (BYTES_PER_SAMPLE * SAMPLES_PER_BLOCK)
 #define BLOCK_COUNT (INITIAL_BLOCKS + 8)
@@ -58,6 +58,7 @@ static const struct gpio_dt_spec button_right = GPIO_DT_SPEC_GET(BUTTON_RIGHT_NO
 #define PROGRESS_UI_UPDATE_MS 1500
 
 K_MEM_SLAB_DEFINE_IN_SECT_STATIC(mem_slab, __nocache, BLOCK_SIZE, BLOCK_COUNT, 4);
+static uint8_t read_buf[BLOCK_SIZE];
 
 static struct i2s_config i2s_cfg = {
 	.word_size = SAMPLE_BIT_WIDTH,
@@ -414,9 +415,10 @@ static void ui_refresh(struct app_state *state)
 
 static void stop_playback(struct app_state *state, bool close_file, bool drop_i2s)
 {
-	if (state->i2s_started && drop_i2s)
+	if (drop_i2s)
 	{
 		(void)i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_DROP);
+		(void)i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_PREPARE);
 	}
 	state->i2s_started = false;
 
@@ -437,41 +439,31 @@ static void stop_playback(struct app_state *state, bool close_file, bool drop_i2
 
 static int queue_one_block(struct app_state *state, bool *eof)
 {
-	void *mem_block = NULL;
 	size_t bytes_read = BLOCK_SIZE;
 	int64_t now_ms;
 	int ret;
 
 	*eof = false;
-	ret = k_mem_slab_alloc(&mem_slab, &mem_block, K_NO_WAIT);
+	ret = sd_card_read((char *)read_buf, &bytes_read, &state->file);
 	if (ret)
 	{
-		return ret;
-	}
-
-	ret = sd_card_read((char *)mem_block, &bytes_read, &state->file);
-	if (ret)
-	{
-		k_mem_slab_free(&mem_slab, mem_block);
 		return ret;
 	}
 
 	if (bytes_read == 0)
 	{
-		k_mem_slab_free(&mem_slab, mem_block);
 		*eof = true;
 		return 0;
 	}
 
 	if (bytes_read < BLOCK_SIZE)
 	{
-		memset((uint8_t *)mem_block + bytes_read, 0, BLOCK_SIZE - bytes_read);
+		memset(read_buf + bytes_read, 0, BLOCK_SIZE - bytes_read);
 	}
 
-	ret = i2s_write(i2s_dev, mem_block, BLOCK_SIZE);
+	ret = i2s_buf_write(i2s_dev, read_buf, BLOCK_SIZE);
 	if (ret < 0)
 	{
-		k_mem_slab_free(&mem_slab, mem_block);
 		return ret;
 	}
 
@@ -651,25 +643,22 @@ static void process_playback(struct app_state *state)
 		return;
 	}
 
-	while (1)
+	ret = queue_one_block(state, &eof);
+	if (ret == -ENOMEM || ret == -EAGAIN || ret == -EBUSY || ret == -ENOMSG)
 	{
-		ret = queue_one_block(state, &eof);
-		if (ret == -ENOMEM || ret == -EAGAIN || ret == -EBUSY || ret == -ENOMSG)
-		{
-			break;
-		}
-		if (ret)
-		{
-			LOG_ERR("Playback error: %d", ret);
-			stop_playback(state, true, true);
-			return;
-		}
+		return;
+	}
+	if (ret)
+	{
+		LOG_ERR("Playback error: %d", ret);
+		stop_playback(state, true, true);
+		return;
+	}
 
-		if (eof)
-		{
-			stop_playback(state, true, true);
-			return;
-		}
+	if (eof)
+	{
+		stop_playback(state, true, true);
+		return;
 	}
 }
 
