@@ -44,7 +44,7 @@ static const struct gpio_dt_spec button_right = GPIO_DT_SPEC_GET(BUTTON_RIGHT_NO
 #define BYTES_PER_SAMPLE 2
 #define NUMBER_OF_CHANNELS 2
 #define SAMPLES_PER_BLOCK ((SAMPLE_FREQUENCY / 10) * NUMBER_OF_CHANNELS)
-#define INITIAL_BLOCKS 4
+#define INITIAL_BLOCKS 12
 #define TIMEOUT 2000
 
 #define BLOCK_SIZE (BYTES_PER_SAMPLE * SAMPLES_PER_BLOCK)
@@ -55,7 +55,8 @@ static const struct gpio_dt_spec button_right = GPIO_DT_SPEC_GET(BUTTON_RIGHT_NO
 #define SONG_LIST_BUF_SIZE 2048
 #define SONG_LIST_TEXT_BUF_SIZE 4096
 #define WAV_HEADER_SIZE 44
-#define PROGRESS_UI_UPDATE_MS 1500
+#define PROGRESS_UI_UPDATE_MS 10000
+#define PROGRESS_UI_STEP_PCT 10
 
 K_MEM_SLAB_DEFINE_IN_SECT_STATIC(mem_slab, __nocache, BLOCK_SIZE, BLOCK_COUNT, 4);
 static uint8_t read_buf[BLOCK_SIZE];
@@ -90,6 +91,7 @@ struct app_state
 	bool i2s_started;
 	uint32_t data_total_bytes;
 	uint32_t data_streamed_bytes;
+	uint8_t progress_step;
 	int64_t last_progress_ui_ms;
 	bool ui_dirty;
 	bool list_dirty;
@@ -104,6 +106,7 @@ static struct app_state app = {
 	.i2s_started = false,
 	.data_total_bytes = 0,
 	.data_streamed_bytes = 0,
+	.progress_step = 0,
 	.last_progress_ui_ms = 0,
 	.ui_dirty = true,
 	.list_dirty = true,
@@ -432,6 +435,7 @@ static void stop_playback(struct app_state *state, bool close_file, bool drop_i2
 	state->playing_index = -1;
 	state->data_total_bytes = 0;
 	state->data_streamed_bytes = 0;
+	state->progress_step = 0;
 	state->last_progress_ui_ms = 0;
 	state->ui_dirty = true;
 	state->list_dirty = true;
@@ -469,10 +473,17 @@ static int queue_one_block(struct app_state *state, bool *eof)
 
 	state->data_streamed_bytes += (uint32_t)bytes_read;
 	now_ms = k_uptime_get();
-	if ((now_ms - state->last_progress_ui_ms) >= PROGRESS_UI_UPDATE_MS)
+	if (state->data_total_bytes > 0)
 	{
-		state->last_progress_ui_ms = now_ms;
-		state->ui_dirty = true;
+		uint32_t percent = (state->data_streamed_bytes * 100U) / state->data_total_bytes;
+		uint8_t step = (uint8_t)(percent / PROGRESS_UI_STEP_PCT);
+
+		if (step > state->progress_step && (now_ms - state->last_progress_ui_ms) >= PROGRESS_UI_UPDATE_MS)
+		{
+			state->progress_step = step;
+			state->last_progress_ui_ms = now_ms;
+			state->ui_dirty = true;
+		}
 	}
 	return 0;
 }
@@ -575,6 +586,7 @@ static int start_selected_song(struct app_state *state)
 	state->playing_index = state->selected_index;
 	state->data_total_bytes = (uint32_t)(file_size - WAV_HEADER_SIZE);
 	state->data_streamed_bytes = 0;
+	state->progress_step = 0;
 	state->last_progress_ui_ms = 0;
 	state->playback_state = PLAYBACK_PLAYING;
 	state->ui_dirty = true;
@@ -604,6 +616,7 @@ static int pause_song(struct app_state *state)
 	{
 		return ret;
 	}
+	(void)i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_PREPARE);
 
 	state->i2s_started = false;
 	state->playback_state = PLAYBACK_PAUSED;
