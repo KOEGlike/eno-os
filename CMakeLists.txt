@@ -11,8 +11,12 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(eno-os)
 
-target_sources(app PRIVATE 
+target_sources(app PRIVATE
   src/main.c
+  src/buttons.c
+  src/audio.c
+  src/ui.c
+  src/songs.c
   lib/sd_card.c
   lib/i2c_dac.c
 )
