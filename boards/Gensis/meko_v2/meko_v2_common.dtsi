@@ -108,7 +108,38 @@
             };
 
             partial {
-                border-waveform = <0x3c>;
+                /*
+                 * Partial refresh waveform for SSD1681-based 200x200
+                 * panels (Waveshare/GoodDisplay WF_PARTIAL_1IN54_0).
+                 * lut is the 0x32 payload; the remaining table entries
+                 * map to gdv (0x03), sdv (0x04) and vcom (0x2C). The
+                 * vendored driver additionally writes the vendor
+                 * "Option for LUT end" value (0x3F) for this profile.
+                 */
+                border-waveform = <0x80>;
+                vcom = <0x28>;
+                gdv = [17];
+                sdv = [41 b0 32];
+                lut = [
+                    00 40 00 00 00 00 00 00 00 00 00 00
+                    80 80 00 00 00 00 00 00 00 00 00 00
+                    40 40 00 00 00 00 00 00 00 00 00 00
+                    00 80 00 00 00 00 00 00 00 00 00 00
+                    00 00 00 00 00 00 00 00 00 00 00 00
+                    0f 00 00 00 00 00 00
+                    01 01 00 00 00 00 00
+                    00 00 00 00 00 00 00
+                    00 00 00 00 00 00 00
+                    00 00 00 00 00 00 00
+                    00 00 00 00 00 00 00
+                    00 00 00 00 00 00 00
+                    00 00 00 00 00 00 00
+                    00 00 00 00 00 00 00
+                    00 00 00 00 00 00 00
+                    00 00 00 00 00 00 00
+                    00 00 00 00 00 00 00
+                    22 22 22 22 22 22 00 00 00
+                ];
             };
         };
     };

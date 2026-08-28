@@ -137,6 +137,7 @@ int main(void)
 			ui_refresh(&app);
 			app.ui_dirty = false;
 			did_ui_refresh = true;
+			ui_full_refresh_check(&app);
 		}
 
 		now_ms = k_uptime_get();

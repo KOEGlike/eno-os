@@ -7,6 +7,9 @@ endif()
 # Allow Zephyr to discover custom boards in this repository (eno-os/boards/*).
 list(APPEND BOARD_ROOT ${CMAKE_CURRENT_LIST_DIR})
 
+# Vendored SSD16XX display driver (see modules/display_ssd16xx/Kconfig).
+list(APPEND ZEPHYR_EXTRA_MODULES ${CMAKE_CURRENT_LIST_DIR}/modules/display_ssd16xx)
+
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(eno-os)

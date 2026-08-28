@@ -16,12 +16,50 @@ LOG_MODULE_REGISTER(UI, LOG_LEVEL_DBG);
 #define DISPLAY_NODE DT_CHOSEN(zephyr_display)
 static const struct device *display = DEVICE_DT_GET(DISPLAY_NODE);
 
+/* Full refreshes clear ghosting accumulated by partial refreshes */
+#define FULL_REFRESH_INTERVAL 10
+
+#define DISPLAY_SELFTEST 0
+
+static uint32_t partial_refreshes;
+
 static lv_obj_t *top_label;
 static lv_obj_t *progress_label;
 static lv_obj_t *list_label;
 static char cached_top_text[128];
 static char cached_progress_text[128];
 static char cached_list_text[SONG_LIST_TEXT_BUF_SIZE];
+
+#if DISPLAY_SELFTEST
+static void display_selftest(void)
+{
+	static uint8_t white[(200 * 200) / 8];
+	static uint8_t black[(200 * 200) / 8];
+	struct display_buffer_descriptor desc = {
+		.buf_size = sizeof(white),
+		.width = 200,
+		.height = 200,
+		.pitch = 200,
+	};
+
+	memset(white, 0xFF, sizeof(white));
+	memset(black, 0x00, sizeof(black));
+
+	LOG_INF("SELFTEST phase 1: expecting ALL WHITE");
+	display_blanking_on(display);
+	display_write(display, 0, 0, &desc, white);
+	display_blanking_off(display);
+	k_sleep(K_SECONDS(5));
+
+	LOG_INF("SELFTEST phase 2: expecting ALL BLACK");
+	display_blanking_on(display);
+	display_write(display, 0, 0, &desc, black);
+	display_blanking_off(display);
+	k_sleep(K_SECONDS(5));
+
+	LOG_INF("SELFTEST done, starting UI");
+}
+#endif
 
 int ui_init(void)
 {
@@ -30,6 +68,10 @@ int ui_init(void)
 		LOG_ERR("Display not ready");
 		return -ENODEV;
 	}
+
+#if DISPLAY_SELFTEST
+	display_selftest();
+#endif
 
 	if (display_blanking_off(display))
 	{
@@ -140,4 +182,28 @@ void ui_refresh(struct app_state *state)
 	lvgl_unlock();
 
 	state->list_dirty = false;
+}
+
+void ui_full_refresh_check(struct app_state *state)
+{
+	partial_refreshes++;
+
+	if (state->playback_state == PLAYBACK_PLAYING ||
+		partial_refreshes < FULL_REFRESH_INTERVAL)
+	{
+		return;
+	}
+
+	partial_refreshes = 0;
+
+	/*
+	 * Toggling blanking makes the display driver switch to the
+	 * full-refresh profile and trigger a full update, which
+	 * clears accumulated ghosting. Skip while playing since the
+	 * full refresh blocks for a couple of seconds.
+	 */
+	lvgl_lock();
+	display_blanking_on(display);
+	display_blanking_off(display);
+	lvgl_unlock();
 }
