@@ -10,19 +10,30 @@ LOG_MODULE_REGISTER(SONGS, LOG_LEVEL_INF);
 
 #define SONG_LIST_BUF_SIZE 2048
 
-static bool ends_with_wav(const char *name)
+static bool ends_with(const char *name, const char *ext)
 {
 	size_t len = strlen(name);
+	size_t ext_len = strlen(ext);
+	size_t i;
 
-	if (len < 4)
+	if (len < ext_len)
 	{
 		return false;
 	}
 
-	return tolower((unsigned char)name[len - 4]) == '.' &&
-		   tolower((unsigned char)name[len - 3]) == 'w' &&
-		   tolower((unsigned char)name[len - 2]) == 'a' &&
-		   tolower((unsigned char)name[len - 1]) == 'v';
+	for (i = 0; i < ext_len; i++)
+	{
+		if (tolower((unsigned char)name[len - ext_len + i]) != ext[i])
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool is_playable(const char *name)
+{
+	return ends_with(name, ".wav") || ends_with(name, ".mp3");
 }
 
 int load_songs_from_root(struct app_state *state)
@@ -44,7 +55,7 @@ int load_songs_from_root(struct app_state *state)
 	entry = strtok(list_buf, "\r\n");
 	while (entry != NULL && state->song_count < MAX_SONGS)
 	{
-		if (ends_with_wav(entry))
+		if (is_playable(entry))
 		{
 			strncpy(state->songs[state->song_count], entry, MAX_SONG_NAME_LEN - 1);
 			state->songs[state->song_count][MAX_SONG_NAME_LEN - 1] = '\0';
@@ -64,6 +75,6 @@ int load_songs_from_root(struct app_state *state)
 
 	state->list_dirty = true;
 	state->ui_dirty = true;
-	LOG_INF("Loaded %d WAV song(s) from SD root", state->song_count);
+	LOG_INF("Loaded %d song(s) from SD root", state->song_count);
 	return 0;
 }

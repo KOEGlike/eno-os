@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "audio.h"
+#include "decoder.h"
 
 LOG_MODULE_REGISTER(AUDIO, LOG_LEVEL_DBG);
 
@@ -20,7 +21,9 @@ static const struct device *codec_dev = DEVICE_DT_GET(CODEC_NODE);
 static const struct device *i2s_dev = DEVICE_DT_GET(I2S_NODE);
 
 K_MEM_SLAB_DEFINE_IN_SECT_STATIC(mem_slab, __nocache, BLOCK_SIZE, BLOCK_COUNT, 4);
-static uint8_t read_buf[BLOCK_SIZE];
+
+static struct audio_decoder decoder;
+static uint32_t song_block_bytes = BLOCK_SIZE;
 
 static struct i2s_config i2s_cfg = {
 	.word_size = SAMPLE_BIT_WIDTH,
@@ -42,6 +45,45 @@ static struct audio_codec_cfg codec_cfg = {
 	},
 	.dai_route = AUDIO_ROUTE_PLAYBACK,
 };
+
+static int configure_stream(uint32_t sample_rate)
+{
+	uint32_t block_bytes;
+	int ret;
+
+	/* ~100 ms blocks at low rates, capped by the slab, 4-byte aligned */
+	block_bytes = ((sample_rate / 10) * 4) & ~0x3U;
+	if (block_bytes < 4) {
+		block_bytes = 4;
+	}
+	song_block_bytes = MIN(block_bytes, BLOCK_SIZE);
+
+	/* Power the DAC down while its rate code changes, per the TI
+	 * recommended sequence, and bring it back up after.
+	 */
+	audio_codec_stop_output(codec_dev);
+
+	i2s_cfg.frame_clk_freq = sample_rate;
+	i2s_cfg.block_size = song_block_bytes;
+	ret = i2s_configure(i2s_dev, I2S_DIR_TX, &i2s_cfg);
+	if (ret < 0)
+	{
+		LOG_ERR("I2S reconfigure failed for %u Hz: %d", sample_rate, ret);
+		return ret;
+	}
+
+	codec_cfg.dai_cfg.i2s.frame_clk_freq = sample_rate;
+	ret = audio_codec_configure(codec_dev, &codec_cfg);
+	if (ret)
+	{
+		LOG_ERR("Codec reconfigure failed: %d", ret);
+		return ret;
+	}
+
+	audio_codec_start_output(codec_dev);
+
+	return 0;
+}
 
 int init_audio(void)
 {
@@ -93,14 +135,20 @@ int init_audio(void)
 	return 0;
 }
 
-void stop_playback(struct app_state *state, bool close_file, bool drop_i2s)
+void stop_playback(struct app_state *state, bool close_file, bool drop)
 {
-	if (drop_i2s)
+	if (drop)
 	{
 		(void)i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_DROP);
-		(void)i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_PREPARE);
+	}
+	else
+	{
+		/* drain: let the already queued blocks finish playing */
+		(void)i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_DRAIN);
 	}
 	state->i2s_started = false;
+
+	decoder_close(&decoder);
 
 	if (close_file && state->file_open)
 	{
@@ -120,39 +168,48 @@ void stop_playback(struct app_state *state, bool close_file, bool drop_i2s)
 
 int queue_one_block(struct app_state *state, bool *eof)
 {
-	size_t bytes_read = BLOCK_SIZE;
+	void *block;
+	size_t frames;
+	size_t bytes;
 	int64_t now_ms;
 	int ret;
 
 	*eof = false;
-	ret = sd_card_read((char *)read_buf, &bytes_read, &state->file);
+
+	ret = k_mem_slab_alloc(&mem_slab, &block, K_NO_WAIT);
 	if (ret)
 	{
+		/* queue full: we are ahead of playback, try again later */
 		return ret;
 	}
 
-	if (bytes_read == 0)
+	frames = decoder_fill(&decoder, (int16_t *)block, song_block_bytes / 4);
+	if (frames == 0)
 	{
+		k_mem_slab_free(&mem_slab, block);
 		*eof = true;
 		return 0;
 	}
 
-	if (bytes_read < BLOCK_SIZE)
+	bytes = frames * 4;
+	if (bytes < song_block_bytes)
 	{
-		memset(read_buf + bytes_read, 0, BLOCK_SIZE - bytes_read);
+		memset((uint8_t *)block + bytes, 0, song_block_bytes - bytes);
 	}
 
-	ret = i2s_buf_write(i2s_dev, read_buf, BLOCK_SIZE);
+	/* ownership of the block moves to the I2S driver */
+	ret = i2s_buf_write(i2s_dev, block, song_block_bytes);
 	if (ret < 0)
 	{
+		k_mem_slab_free(&mem_slab, block);
 		return ret;
 	}
 
-	state->data_streamed_bytes += (uint32_t)bytes_read;
+	state->data_streamed_bytes = decoder.progress_num;
 	now_ms = k_uptime_get();
-	if (state->data_total_bytes > 0)
+	if (decoder.progress_den > 0)
 	{
-		uint32_t percent = (state->data_streamed_bytes * 100U) / state->data_total_bytes;
+		uint32_t percent = (decoder.progress_num * 100U) / decoder.progress_den;
 		uint8_t step = (uint8_t)(percent / PROGRESS_UI_STEP_PCT);
 
 		if (step > state->progress_step && (now_ms - state->last_progress_ui_ms) >= PROGRESS_UI_UPDATE_MS)
@@ -187,9 +244,7 @@ int prefill_and_start(struct app_state *state)
 			break;
 		}
 		queued++;
-	}
-
-	if (queued == 0)
+	}	if (queued == 0)
 	{
 		return -ENODATA;
 	}
@@ -206,8 +261,6 @@ int prefill_and_start(struct app_state *state)
 
 int start_selected_song(struct app_state *state)
 {
-	uint8_t wav_header[WAV_HEADER_SIZE];
-	size_t header_len = sizeof(wav_header);
 	off_t file_size;
 	int ret;
 
@@ -233,7 +286,7 @@ int start_selected_song(struct app_state *state)
 	}
 
 	file_size = fs_tell(&state->file);
-	if (file_size <= WAV_HEADER_SIZE)
+	if (file_size <= 0)
 	{
 		stop_playback(state, true, true);
 		return -EINVAL;
@@ -246,22 +299,25 @@ int start_selected_song(struct app_state *state)
 		return ret;
 	}
 
-	ret = sd_card_read((char *)wav_header, &header_len, &state->file);
-	if (ret || header_len < WAV_HEADER_SIZE)
+	ret = decoder_open(&decoder, &state->file, (uint32_t)file_size);
+	if (ret)
 	{
+		LOG_ERR("Failed to open %s: %d", state->songs[state->selected_index], ret);
 		stop_playback(state, true, true);
-		return ret ? ret : -EINVAL;
+		return ret;
 	}
 
-	if (memcmp(wav_header, "RIFF", 4) != 0 || memcmp(&wav_header[8], "WAVE", 4) != 0)
+	LOG_INF("%s: %u Hz", state->songs[state->selected_index], decoder.sample_rate);
+
+	ret = configure_stream(decoder.sample_rate);
+	if (ret)
 	{
-		LOG_ERR("%s is not a valid WAV file", state->songs[state->selected_index]);
 		stop_playback(state, true, true);
-		return -EINVAL;
+		return ret;
 	}
 
 	state->playing_index = state->selected_index;
-	state->data_total_bytes = (uint32_t)(file_size - WAV_HEADER_SIZE);
+	state->data_total_bytes = decoder.progress_den;
 	state->data_streamed_bytes = 0;
 	state->progress_step = 0;
 	state->last_progress_ui_ms = 0;
@@ -293,7 +349,6 @@ int pause_song(struct app_state *state)
 	{
 		return ret;
 	}
-	(void)i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_PREPARE);
 
 	state->i2s_started = false;
 	state->playback_state = PLAYBACK_PAUSED;
@@ -333,21 +388,28 @@ void process_playback(struct app_state *state)
 		return;
 	}
 
-	ret = queue_one_block(state, &eof);
-	if (ret == -ENOMEM || ret == -EAGAIN || ret == -EBUSY || ret == -ENOMSG)
+	/* keep the I2S queue topped up; each block costs one SD read
+	 * plus decode time, so do a few per loop iteration
+	 */
+	for (int i = 0; i < 4; i++)
 	{
-		return;
-	}
-	if (ret)
-	{
-		LOG_ERR("Playback error: %d", ret);
-		stop_playback(state, true, true);
-		return;
-	}
+		ret = queue_one_block(state, &eof);
+		if (ret == -ENOMEM || ret == -EAGAIN || ret == -EBUSY || ret == -ENOMSG)
+		{
+			return;
+		}
+		if (ret)
+		{
+			LOG_ERR("Playback error: %d", ret);
+			stop_playback(state, true, true);
+			return;
+		}
 
-	if (eof)
-	{
-		stop_playback(state, true, true);
-		return;
+		if (eof)
+		{
+			/* drain the queued blocks so the tail isn't cut off */
+			stop_playback(state, true, false);
+			return;
+		}
 	}
 }

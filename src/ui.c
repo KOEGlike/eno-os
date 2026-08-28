@@ -140,7 +140,7 @@ void ui_refresh(struct app_state *state)
 		list_text[0] = '\0';
 		if (state->song_count == 0)
 		{
-			snprintk(list_text, sizeof(list_text), "No .wav files in SD root.");
+			snprintk(list_text, sizeof(list_text), "No .wav/.mp3 files in SD root.");
 		}
 		else
 		{
