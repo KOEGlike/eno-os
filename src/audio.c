@@ -2,23 +2,22 @@
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/audio/codec.h>
 #include <zephyr/fs/fs.h>
 #include <string.h>
 
 #include "audio.h"
 
-extern int initialize_dac(const struct i2c_dt_spec *dac);
-extern int power_on_dac(const struct i2c_dt_spec *dac);
-
 LOG_MODULE_REGISTER(AUDIO, LOG_LEVEL_DBG);
 
-#define DAC_NODE DT_NODELABEL(tad5212)
-static const struct i2c_dt_spec dac = I2C_DT_SPEC_GET(DAC_NODE);
+#define CODEC_NODE DT_NODELABEL(tad5212)
+static const struct device *codec_dev = DEVICE_DT_GET(CODEC_NODE);
+
+/* Matches the listening level the retired PurePath register dump used */
+#define DAC_DEFAULT_VOLUME_DB (-8)
 
 #define I2S_NODE DT_NODELABEL(i2s0)
 static const struct device *i2s_dev = DEVICE_DT_GET(I2S_NODE);
-
-#define SONG_LIST_BUF_SIZE 2048
 
 K_MEM_SLAB_DEFINE_IN_SECT_STATIC(mem_slab, __nocache, BLOCK_SIZE, BLOCK_COUNT, 4);
 static uint8_t read_buf[BLOCK_SIZE];
@@ -34,22 +33,25 @@ static struct i2s_config i2s_cfg = {
 	.timeout = TIMEOUT,
 };
 
+static struct audio_codec_cfg codec_cfg = {
+	.dai_type = AUDIO_DAI_TYPE_I2S,
+	.dai_cfg.i2s = {
+		.word_size = SAMPLE_BIT_WIDTH,
+		.channels = NUMBER_OF_CHANNELS,
+		.frame_clk_freq = SAMPLE_FREQUENCY,
+	},
+	.dai_route = AUDIO_ROUTE_PLAYBACK,
+};
+
 int init_audio(void)
 {
 	int ret;
+	audio_property_value_t val;
 
-	ret = initialize_dac(&dac);
-	if (ret)
+	if (!device_is_ready(codec_dev))
 	{
-		LOG_ERR("DAC init failed: %d", ret);
-		return ret;
-	}
-
-	ret = power_on_dac(&dac);
-	if (ret)
-	{
-		LOG_ERR("DAC power on failed: %d", ret);
-		return ret;
+		LOG_ERR("Codec device not ready");
+		return -ENODEV;
 	}
 
 	if (!device_is_ready(i2s_dev))
@@ -64,6 +66,29 @@ int init_audio(void)
 		LOG_ERR("I2S configure failed: %d", ret);
 		return ret;
 	}
+
+	ret = audio_codec_configure(codec_dev, &codec_cfg);
+	if (ret)
+	{
+		LOG_ERR("Codec configure failed: %d", ret);
+		return ret;
+	}
+
+	val.vol = DAC_DEFAULT_VOLUME_DB;
+	ret = audio_codec_set_property(codec_dev, AUDIO_PROPERTY_OUTPUT_VOLUME, AUDIO_CHANNEL_ALL, val);
+	if (ret)
+	{
+		LOG_ERR("Codec volume failed: %d", ret);
+		return ret;
+	}
+	ret = audio_codec_apply_properties(codec_dev);
+	if (ret)
+	{
+		LOG_ERR("Codec apply properties failed: %d", ret);
+		return ret;
+	}
+
+	audio_codec_start_output(codec_dev);
 
 	return 0;
 }

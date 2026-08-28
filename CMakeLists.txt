@@ -21,7 +21,6 @@ target_sources(app PRIVATE
   src/ui.c
   src/songs.c
   lib/sd_card.c
-  lib/i2c_dac.c
 )
 
 target_include_directories(app PRIVATE

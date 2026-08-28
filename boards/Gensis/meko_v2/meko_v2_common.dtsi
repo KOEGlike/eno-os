@@ -221,11 +221,20 @@
     };
 
     tad5212: tad5212@50 {
-        // compatible = "ti,tad5x12";
-        compatible = "i2c-device";
+        compatible = "ti,tad5x12";
         status = "okay";
 
         reg = <0x50>;
+
+        ti,out1-src = <1>;        /* DAC input */
+        ti,out1-cfg = <2>;        /* mono single-ended at OUT1P */
+        ti,out1-drive = <1>;      /* headphone */
+        ti,out1-analog-level = <4>; /* 0 dB */
+        ti,out2-src = <1>;        /* DAC input */
+        ti,out2-cfg = <2>;        /* mono single-ended at OUT2P */
+        ti,out2-drive = <1>;      /* headphone */
+        ti,out2-analog-level = <4>; /* 0 dB */
+        ti,pasi-pll-en;
     };
 
     npm1300_pmic: npm1300@6b {
