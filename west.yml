@@ -11,7 +11,7 @@ manifest:
     - name: sdk-nrf
       remote: ncs
       path: nrf
-      revision: v3.2.1  # <--- LOCK YOUR VERSION HERE (e.g., v2.5.0, v2.7.0, main)
+      revision: v3.4.0  # <--- LOCK YOUR VERSION HERE (e.g., v2.5.0, v2.7.0, main)
       import: true      # This imports all sub-dependencies (zephyr, mbedtls, etc.)
 
     - name: tad5x12
