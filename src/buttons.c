@@ -3,6 +3,7 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/atomic.h>
 
 #include "buttons.h"
 
@@ -12,130 +13,117 @@ LOG_MODULE_REGISTER(BUTTONS, LOG_LEVEL_INF);
 #define BUTTON_LEFT_NODE DT_NODELABEL(button_side_left)
 #define BUTTON_RIGHT_NODE DT_NODELABEL(button_side_right)
 
-static const struct gpio_dt_spec button_power = GPIO_DT_SPEC_GET(BUTTON_POWER_NODE, gpios);
-static const struct gpio_dt_spec button_left = GPIO_DT_SPEC_GET(BUTTON_LEFT_NODE, gpios);
-static const struct gpio_dt_spec button_right = GPIO_DT_SPEC_GET(BUTTON_RIGHT_NODE, gpios);
-
-static atomic_t power_events;
-static atomic_t left_events;
-static atomic_t right_events;
-
-static struct gpio_callback power_cb;
-static struct gpio_callback left_cb;
-static struct gpio_callback right_cb;
-
-/* The DT debounce-interval only applies to the gpio-keys subsystem,
- * which this raw GPIO driver does not use — bounce filtering has to
- * happen here. A mechanical switch settles in <10 ms; 100 ms also
- * rate-limits the navigation buttons comfortably.
+/* Edges are not trusted directly: after an edge, the line must stay
+ * settled this long before the pin level is sampled to decide what
+ * happened. A timestamp-only debounce let double-make presses through
+ * (the second make arrives well after the bounce window); confirming
+ * the level and re-arming only on a confirmed release collapses any
+ * number of make-breaks into exactly one event per press.
  */
-#define BUTTON_DEBOUNCE_MS 100
+#define BUTTON_CONFIRM_DELAY_MS 30
 
-static int64_t power_last_ms;
-static int64_t left_last_ms;
-static int64_t right_last_ms;
+struct button {
+	const struct gpio_dt_spec spec;
+	struct gpio_callback cb;
+	struct k_work_delayable confirm_work;
+	atomic_t waiting_release;
+	atomic_t events;
+};
 
-static bool button_debounce(int64_t *last_ms)
+static struct button button_power = {
+	.spec = GPIO_DT_SPEC_GET(BUTTON_POWER_NODE, gpios),
+};
+static struct button button_left = {
+	.spec = GPIO_DT_SPEC_GET(BUTTON_LEFT_NODE, gpios),
+};
+static struct button button_right = {
+	.spec = GPIO_DT_SPEC_GET(BUTTON_RIGHT_NODE, gpios),
+};
+
+/* Runs on the system workqueue, BUTTON_CONFIRM_DELAY_MS after the
+ * last edge: the line has had time to settle, so its level now tells
+ * press (count, wait for release) from glitch (ignore).
+ */
+static void button_confirm(struct k_work *work)
 {
-	int64_t now = k_uptime_get();
+	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+	struct button *btn = CONTAINER_OF(dwork, struct button, confirm_work);
+	bool active = gpio_pin_get_dt(&btn->spec) == 1;
 
-	if (now - *last_ms < BUTTON_DEBOUNCE_MS)
+	if (!active)
 	{
-		return false;
-	}
-	*last_ms = now;
-	return true;
-}
-
-static void button_power_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
-{
-	ARG_UNUSED(dev);
-	ARG_UNUSED(cb);
-	ARG_UNUSED(pins);
-
-	if (!button_debounce(&power_last_ms))
-	{
+		/* Settled at inactive: re-arm for the next press */
+		atomic_set(&btn->waiting_release, 0);
 		return;
 	}
-	atomic_inc(&power_events);
+
+	if (atomic_cas(&btn->waiting_release, 0, 1))
+	{
+		atomic_inc(&btn->events);
+	}
 }
 
-static void button_left_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
+static void button_edge(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
 	ARG_UNUSED(dev);
-	ARG_UNUSED(cb);
 	ARG_UNUSED(pins);
 
-	if (!button_debounce(&left_last_ms))
+	struct button *btn = CONTAINER_OF(cb, struct button, cb);
+	bool active = gpio_pin_get_dt(&btn->spec) == 1;
+
+	if (active && atomic_get(&btn->waiting_release))
 	{
+		/* Still held (double-make, jitter): a second press is
+		 * only accepted after a confirmed release
+		 */
 		return;
 	}
-	atomic_inc(&left_events);
-}
 
-static void button_right_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
-{
-	ARG_UNUSED(dev);
-	ARG_UNUSED(cb);
-	ARG_UNUSED(pins);
-
-	if (!button_debounce(&right_last_ms))
-	{
-		return;
-	}
-	atomic_inc(&right_events);
+	/* Every edge pushes the confirmation out, so the level is
+	 * sampled once the line has stopped bouncing
+	 */
+	k_work_reschedule(&btn->confirm_work, K_MSEC(BUTTON_CONFIRM_DELAY_MS));
 }
 
 int init_buttons(void)
 {
+	static struct button *const buttons[] = {
+		&button_power,
+		&button_left,
+		&button_right,
+	};
 	int ret;
 
-	if (!device_is_ready(button_power.port) || !device_is_ready(button_left.port) || !device_is_ready(button_right.port))
+	for (size_t i = 0; i < ARRAY_SIZE(buttons); i++)
 	{
-		LOG_ERR("Button GPIO device not ready");
-		return -ENODEV;
-	}
+		struct button *btn = buttons[i];
 
-	ret = gpio_pin_configure_dt(&button_power, GPIO_INPUT);
-	if (ret)
-	{
-		return ret;
-	}
-	ret = gpio_pin_configure_dt(&button_left, GPIO_INPUT);
-	if (ret)
-	{
-		return ret;
-	}
-	ret = gpio_pin_configure_dt(&button_right, GPIO_INPUT);
-	if (ret)
-	{
-		return ret;
-	}
+		if (!device_is_ready(btn->spec.port))
+		{
+			LOG_ERR("Button GPIO device not ready");
+			return -ENODEV;
+		}
 
-	ret = gpio_pin_interrupt_configure_dt(&button_power, GPIO_INT_EDGE_TO_ACTIVE);
-	if (ret)
-	{
-		return ret;
-	}
-	ret = gpio_pin_interrupt_configure_dt(&button_left, GPIO_INT_EDGE_TO_ACTIVE);
-	if (ret)
-	{
-		return ret;
-	}
-	ret = gpio_pin_interrupt_configure_dt(&button_right, GPIO_INT_EDGE_TO_ACTIVE);
-	if (ret)
-	{
-		return ret;
-	}
+		ret = gpio_pin_configure_dt(&btn->spec, GPIO_INPUT);
+		if (ret)
+		{
+			return ret;
+		}
 
-	gpio_init_callback(&power_cb, button_power_pressed, BIT(button_power.pin));
-	gpio_add_callback(button_power.port, &power_cb);
+		/* Both edges: releases end the hold-off so the next
+		 * press is accepted
+		 */
+		ret = gpio_pin_interrupt_configure_dt(&btn->spec, GPIO_INT_EDGE_BOTH);
+		if (ret)
+		{
+			return ret;
+		}
 
-	gpio_init_callback(&left_cb, button_left_pressed, BIT(button_left.pin));
-	gpio_add_callback(button_left.port, &left_cb);
+		k_work_init_delayable(&btn->confirm_work, button_confirm);
 
-	gpio_init_callback(&right_cb, button_right_pressed, BIT(button_right.pin));
-	gpio_add_callback(button_right.port, &right_cb);
+		gpio_init_callback(&btn->cb, button_edge, BIT(btn->spec.pin));
+		gpio_add_callback(btn->spec.port, &btn->cb);
+	}
 
 	return 0;
 }
@@ -154,15 +142,15 @@ static int take_events(atomic_t *counter)
 
 int buttons_take_power_events(void)
 {
-	return take_events(&power_events);
+	return take_events(&button_power.events);
 }
 
 int buttons_take_left_events(void)
 {
-	return take_events(&left_events);
+	return take_events(&button_left.events);
 }
 
 int buttons_take_right_events(void)
 {
-	return take_events(&right_events);
+	return take_events(&button_right.events);
 }
