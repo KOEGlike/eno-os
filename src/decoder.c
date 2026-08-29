@@ -52,14 +52,20 @@ static int file_read_u32_at(struct fs_file_t *file, uint32_t offset, uint8_t *bu
 
 	ret = fs_seek(file, offset, FS_SEEK_SET);
 	if (ret < 0) {
+		LOG_ERR("seek 0x%x failed: %d", offset, ret);
 		return ret;
 	}
 
 	n = fs_read(file, buf, len);
 	if (n < 0) {
+		LOG_ERR("read 0x%x failed: %d", offset, (int)n);
 		return (int)n;
 	}
-	return (n == (ssize_t)len) ? 0 : -EIO;
+	if (n != (ssize_t)len) {
+		LOG_ERR("read 0x%x short: %d of %u", offset, (int)n, len);
+		return -EIO;
+	}
+	return 0;
 }
 
 static uint32_t le32(const uint8_t *p)
@@ -79,7 +85,7 @@ static int wav_parse(struct audio_decoder *dec)
 	const uint8_t wave_id[4] = { 'W', 'A', 'V', 'E' };
 	const uint8_t fmt_id[4] = { 'f', 'm', 't', ' ' };
 	const uint8_t data_id[4] = { 'd', 'a', 't', 'a' };
-	uint8_t hdr[8];
+	uint8_t hdr[12]; /* holds "RIFF"+size+"WAVE" on the first read */
 	struct wav_fmt fmt;
 	bool fmt_seen = false;
 	uint32_t off = 12;
@@ -261,8 +267,6 @@ static int mp3_refill(struct audio_decoder *dec)
 {
 	ssize_t n;
 	int ret;
-	static uint32_t refill_count;
-	int64_t t0 = k_uptime_get();
 
 	if (dec->file_exhausted) {
 		return 0;
@@ -289,9 +293,6 @@ static int mp3_refill(struct audio_decoder *dec)
 		dec->file_exhausted = true;
 		return 0;
 	}
-
-	LOG_INF("refill %u bytes in %d ms", (uint32_t)n,
-		(int)(k_uptime_get() - t0));
 
 	dec->file_read_total += (uint32_t)n;
 	dec->ring_len += (uint32_t)n;
@@ -352,6 +353,8 @@ static bool mp3_decode_next(struct audio_decoder *dec)
 		int avail_before = bytes_left;
 		err = MP3Decode(dec->mp3, &inptr, &bytes_left, dec->frame_pcm, 0);
 		consumed = (int)(inptr - (dec->ring + dec->ring_pos));
+		consumed = MIN(consumed, avail_before);
+		dec->ring_pos += (uint32_t)MAX(consumed, 0);
 
 		if (err == ERR_MP3_NONE) {
 			MP3GetLastFrameInfo(dec->mp3, &info);
@@ -374,6 +377,7 @@ static bool mp3_decode_next(struct audio_decoder *dec)
 			dec->pending_frames =
 				(uint32_t)info.outputSamps / (uint32_t)info.nChans;
 			dec->pending_pos = 0;
+
 			return true;
 		}
 
@@ -393,9 +397,21 @@ static bool mp3_decode_next(struct audio_decoder *dec)
 			return false;
 		}
 
-		/* Bad frame: make sure we always make progress */
-		consumed = MIN(consumed, avail_before);
-		dec->ring_pos += (consumed > 0) ? (uint32_t)consumed : 1;
+		/* Bad frame: ring_pos already advanced past what helix
+		 * consumed; make sure a zero-consumption decode still
+		 * makes progress
+		 */
+		if (consumed <= 0)
+		{
+			dec->ring_pos++;
+		}
+
+		static uint32_t bad_frames;
+
+		if ((++bad_frames & 0x0f) == 1)
+		{
+			LOG_WRN("MP3 bad frame #%u (err %d)", bad_frames, err);
+		}
 	}
 }
 
@@ -451,6 +467,7 @@ static int mp3_parse(struct audio_decoder *dec)
 		return -ENOMEM;
 	}
 
+
 	n = fs_read(dec->file, hdr, sizeof(hdr));
 	if (n < 0) {
 		return (int)n;
@@ -502,6 +519,7 @@ int decoder_open(struct audio_decoder *dec, struct fs_file_t *file, uint32_t fil
 
 	n = fs_read(file, sniff, sizeof(sniff));
 	if (n < 0) {
+		LOG_ERR("sniff read failed: %d", (int)n);
 		return (int)n;
 	}
 	ret = fs_seek(file, 0, FS_SEEK_SET);

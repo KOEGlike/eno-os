@@ -43,22 +43,18 @@ static void move_selection(struct app_state *state, int step)
 static void handle_buttons(struct app_state *state)
 {
 	int events;
+	int64_t now = k_uptime_get();
+	static int64_t last_power_action;
 
-	events = buttons_take_left_events();
-	for (int i = 0; i < events; i++)
-	{
-		move_selection(state, -1);
-	}
-
-	events = buttons_take_right_events();
-	for (int i = 0; i < events; i++)
-	{
-		move_selection(state, 1);
-	}
-
+	/* Collapse power-button bursts (bounces, impatient double
+	 * presses) into one action: a second event inside the
+	 * cooldown would pause a song that is still starting up
+	 */
 	events = buttons_take_power_events();
-	for (int i = 0; i < events; i++)
+	if (events > 0 && (now - last_power_action) >= 500)
 	{
+		last_power_action = now;
+
 		int ret = 0;
 		if (state->playback_state == PLAYBACK_PLAYING)
 		{
@@ -78,6 +74,18 @@ static void handle_buttons(struct app_state *state)
 			LOG_ERR("Power action failed: %d", ret);
 			stop_playback(state, true, true);
 		}
+	}
+
+	events = buttons_take_left_events();
+	for (int i = 0; i < events; i++)
+	{
+		move_selection(state, -1);
+	}
+
+	events = buttons_take_right_events();
+	for (int i = 0; i < events; i++)
+	{
+		move_selection(state, 1);
 	}
 }
 
@@ -128,7 +136,6 @@ int main(void)
 	{
 		bool did_ui_refresh = false;
 		int64_t now_ms;
-		int64_t iter_t0 = k_uptime_get();
 
 		handle_buttons(&app);
 
@@ -141,10 +148,6 @@ int main(void)
 		}
 
 		now_ms = k_uptime_get();
-		if ((now_ms - iter_t0) > 200)
-		{
-			LOG_INF("main iteration stalled %d ms", (int)(now_ms - iter_t0));
-		}
 		if ((app.playback_state != PLAYBACK_PLAYING || did_ui_refresh) &&
 			(now_ms - last_lvgl_handler_ms) >= 50)
 		{

@@ -24,6 +24,7 @@ static const struct device *i2s_dev = DEVICE_DT_GET(I2S_NODE);
 K_MEM_SLAB_DEFINE_IN_SECT_STATIC(mem_slab, __nocache, BLOCK_SIZE, BLOCK_COUNT, 4);
 
 static struct audio_decoder decoder;
+static uint8_t audio_scratch[BLOCK_SIZE];
 static uint32_t song_block_bytes = BLOCK_SIZE;
 
 /* Playback pump: decoding runs in its own thread so e-ink UI
@@ -285,16 +286,13 @@ static void audio_stop_nolock(struct app_state *state, bool close_file, bool dro
 	state->list_dirty = true;
 }
 
-static int64_t fill_t0;
-static uint8_t audio_scratch[BLOCK_SIZE];
 
 int queue_one_block(struct app_state *state, bool *eof)
 {
+	void *block;
 	size_t frames;
 	size_t bytes;
 	int64_t now_ms;
-	static uint32_t fill_count;
-	int64_t fill_ms;
 	int ret;
 
 	*eof = false;
@@ -304,15 +302,7 @@ int queue_one_block(struct app_state *state, bool *eof)
 	 */
 	decoder_prefetch(&decoder);
 
-	(void)k_uptime_delta(&fill_t0);
 	frames = decoder_fill(&decoder, (int16_t *)audio_scratch, song_block_bytes / 4);
-	fill_ms = (k_uptime_delta(&fill_t0) + 500) / 1000;
-
-	if ((++fill_count & 0x0f) == 1)
-	{
-		LOG_INF("fill: %u frames in %d ms, %d blocks free",
-			frames, (int)fill_ms, k_mem_slab_num_free_get(&mem_slab));
-	}
 
 	if (frames == 0)
 	{

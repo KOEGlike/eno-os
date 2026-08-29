@@ -234,7 +234,6 @@
         ti,out2-cfg = <2>;        /* mono single-ended at OUT2P */
         ti,out2-drive = <1>;      /* headphone */
         ti,out2-analog-level = <4>; /* 0 dB */
-        ti,pasi-pll-en;
     };
 
     npm1300_pmic: npm1300@6b {
