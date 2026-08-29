@@ -19,9 +19,9 @@ enum audio_file_format {
 struct audio_decoder {
 	enum audio_file_format format;
 	uint32_t sample_rate;
-	/* progress over the decoder's input region (audio payload bytes) */
-	uint32_t progress_num;
-	uint32_t progress_den;
+	/* playback position / duration in milliseconds */
+	uint32_t elapsed_ms;
+	uint32_t total_ms;
 
 	/* internal */
 	struct fs_file_t *file;
@@ -33,6 +33,7 @@ struct audio_decoder {
 	/* wav */
 	uint32_t data_size;
 	uint32_t data_read;
+	uint32_t byte_rate;
 	uint8_t src_bits;
 	uint8_t src_channels;
 
@@ -42,6 +43,7 @@ struct audio_decoder {
 	uint32_t ring_len;
 	uint32_t ring_pos;
 	bool synced;
+	uint32_t elapsed_frames;
 	int16_t *frame_pcm;
 	uint32_t pending_frames;
 	uint32_t pending_pos;

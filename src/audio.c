@@ -278,9 +278,8 @@ static void audio_stop_nolock(struct app_state *state, bool close_file, bool dro
 
 	state->playback_state = PLAYBACK_STOPPED;
 	state->playing_index = -1;
-	state->data_total_bytes = 0;
-	state->data_streamed_bytes = 0;
-	state->progress_step = 0;
+	state->elapsed_s = 0;
+	state->total_s = 0;
 	state->last_progress_ui_ms = 0;
 	state->ui_dirty = true;
 	state->list_dirty = true;
@@ -326,19 +325,13 @@ int queue_one_block(struct app_state *state, bool *eof)
 		return ret;
 	}
 
-	state->data_streamed_bytes = decoder.progress_num;
+	state->elapsed_s = decoder.elapsed_ms / 1000;
+	state->total_s = decoder.total_ms / 1000;
 	now_ms = k_uptime_get();
-	if (decoder.progress_den > 0)
+	if ((now_ms - state->last_progress_ui_ms) >= PROGRESS_UI_UPDATE_MS)
 	{
-		uint32_t percent = (decoder.progress_num * 100U) / decoder.progress_den;
-		uint8_t step = (uint8_t)(percent / PROGRESS_UI_STEP_PCT);
-
-		if (step > state->progress_step && (now_ms - state->last_progress_ui_ms) >= PROGRESS_UI_UPDATE_MS)
-		{
-			state->progress_step = step;
-			state->last_progress_ui_ms = now_ms;
-			state->ui_dirty = true;
-		}
+		state->last_progress_ui_ms = now_ms;
+		state->ui_dirty = true;
 	}
 	return 0;
 }
@@ -445,9 +438,8 @@ int start_selected_song(struct app_state *state)
 	}
 
 	state->playing_index = state->selected_index;
-	state->data_total_bytes = decoder.progress_den;
-	state->data_streamed_bytes = 0;
-	state->progress_step = 0;
+	state->elapsed_s = 0;
+	state->total_s = decoder.total_ms / 1000;
 	state->last_progress_ui_ms = 0;
 	state->playback_state = PLAYBACK_PLAYING;
 	state->ui_dirty = true;

@@ -167,7 +167,20 @@ static int wav_parse(struct audio_decoder *dec)
 	dec->sample_rate = fmt.rate;
 	dec->src_channels = fmt.channels;
 	dec->src_bits = fmt.bits;
-	dec->progress_den = dec->data_size;
+
+	/* For PCM the byte rate is fully determined by the format;
+	 * distrust a header value that disagrees (corrupt files)
+	 */
+	uint32_t expect_rate = (uint32_t)fmt.rate * fmt.channels * (fmt.bits / 8);
+
+	dec->byte_rate = expect_rate;
+	dec->total_ms = (expect_rate > 0)
+		? (uint32_t)((uint64_t)dec->data_size * 1000 / expect_rate)
+		: 0;
+
+	LOG_INF("wav: rate %u ch %u bits %u data %u total_ms %u",
+		fmt.rate, fmt.channels, fmt.bits,
+		dec->data_size, dec->total_ms);
 
 	/* Position the file at the start of the data chunk payload */
 	return fs_seek(dec->file, off, FS_SEEK_SET);
@@ -227,6 +240,7 @@ static size_t wav_fill(struct audio_decoder *dec, int16_t *dst, size_t max_frame
 {
 	uint8_t bytes_per_frame = dec->src_channels * (dec->src_bits / 8);
 	size_t frames = 0;
+	static uint32_t fill_dbg;
 
 	while (frames < max_frames && dec->data_read < dec->data_size) {
 		size_t raw_want = MIN((max_frames - frames) * bytes_per_frame,
@@ -252,7 +266,15 @@ static size_t wav_fill(struct audio_decoder *dec, int16_t *dst, size_t max_frame
 		}
 
 		dec->data_read += got;
-		dec->progress_num = dec->data_read;
+		dec->elapsed_ms = (dec->byte_rate > 0)
+			? (uint32_t)((uint64_t)dec->data_read * 1000 / dec->byte_rate)
+			: 0;
+
+		if ((++fill_dbg & 0x3f) == 1)
+		{
+			LOG_INF("wav elapsed %u ms (read %u of %u)",
+				dec->elapsed_ms, dec->data_read, dec->data_size);
+		}
 
 		size_t src_frames = got / bytes_per_frame;
 
@@ -369,11 +391,19 @@ static bool mp3_decode_next(struct audio_decoder *dec)
 			dec->src_channels = (uint8_t)info.nChans;
 			if (!dec->synced) {
 				dec->sample_rate = (uint32_t)info.samprate;
+				/* CBR duration estimate from the bitrate */
+				dec->total_ms = (info.bitrate > 0)
+					? (uint32_t)((uint64_t)dec->file_size * 8000 / info.bitrate)
+					: 0;
 				dec->synced = true;
 				LOG_INF("MP3: %d Hz, %d ch, layer %d, %d kbps",
 					info.samprate, info.nChans, info.layer,
 					info.bitrate / 1000);
 			}
+			dec->elapsed_frames += (uint32_t)info.outputSamps / (uint32_t)info.nChans;
+			dec->elapsed_ms = (info.samprate > 0)
+				? (uint32_t)((uint64_t)dec->elapsed_frames * 1000 / info.samprate)
+				: 0;
 			dec->pending_frames =
 				(uint32_t)info.outputSamps / (uint32_t)info.nChans;
 			dec->pending_pos = 0;
@@ -418,8 +448,6 @@ static bool mp3_decode_next(struct audio_decoder *dec)
 static size_t mp3_fill(struct audio_decoder *dec, int16_t *dst, size_t max_frames)
 {
 	size_t frames = 0;
-
-	dec->progress_num = dec->file_read_total - (dec->ring_len - dec->ring_pos);
 
 	while (frames < max_frames) {
 		if (dec->pending_pos < dec->pending_frames) {
@@ -491,7 +519,7 @@ static int mp3_parse(struct audio_decoder *dec)
 		}
 	}
 
-	dec->progress_den = dec->file_size;
+	dec->total_ms = 0;
 	dec->sample_rate = 0;
 
 	/* decode the first frame up front so the caller learns the

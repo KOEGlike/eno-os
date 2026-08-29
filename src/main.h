@@ -18,8 +18,7 @@
  * racing the DMA for freed blocks
  */
 #define BLOCK_COUNT (INITIAL_BLOCKS + 20)
-#define PROGRESS_UI_UPDATE_MS 10000
-#define PROGRESS_UI_STEP_PCT 10
+#define PROGRESS_UI_UPDATE_MS 400
 
 enum playback_state {
 	PLAYBACK_STOPPED = 0,
@@ -36,9 +35,8 @@ struct app_state {
 	struct fs_file_t file;
 	bool file_open;
 	bool i2s_started;
-	uint32_t data_total_bytes;
-	uint32_t data_streamed_bytes;
-	uint8_t progress_step;
+	uint32_t elapsed_s;
+	uint32_t total_s;
 	int64_t last_progress_ui_ms;
 	bool ui_dirty;
 	bool list_dirty;

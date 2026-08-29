@@ -112,16 +112,6 @@ void ui_refresh(struct app_state *state)
 	char progress_text[128];
 	char list_text[SONG_LIST_TEXT_BUF_SIZE];
 	size_t off = 0;
-	uint32_t percent = 0;
-
-	if (state->data_total_bytes > 0)
-	{
-		percent = (state->data_streamed_bytes * 100U) / state->data_total_bytes;
-		if (percent > 100U)
-		{
-			percent = 100U;
-		}
-	}
 
 	if (state->playing_index >= 0 && state->playing_index < state->song_count)
 	{
@@ -133,7 +123,9 @@ void ui_refresh(struct app_state *state)
 		snprintk(top_text, sizeof(top_text), "Now: (stopped)");
 	}
 
-	snprintk(progress_text, sizeof(progress_text), "Progress: %u%%", percent);
+	snprintk(progress_text, sizeof(progress_text), "%02u:%02u / %02u:%02u",
+		state->elapsed_s / 60, state->elapsed_s % 60,
+		state->total_s / 60, state->total_s % 60);
 
 	if (state->list_dirty)
 	{
