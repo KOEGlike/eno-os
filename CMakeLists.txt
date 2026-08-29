@@ -17,6 +17,7 @@ project(eno-os)
 target_sources(app PRIVATE
   src/main.c
   src/buttons.c
+  src/knob.c
   src/audio.c
   src/ui.c
   src/songs.c

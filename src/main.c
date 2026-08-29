@@ -7,6 +7,7 @@
 #include "main.h"
 #include "sd_card.h"
 #include "buttons.h"
+#include "knob.h"
 #include "audio.h"
 #include "ui.h"
 #include "songs.h"
@@ -27,16 +28,22 @@ static struct app_state app = {
 	.list_dirty = true,
 };
 
-static void move_selection(struct app_state *state, int step)
+/* Returns true if the selection actually moved (a move is only
+ * possible when songs are loaded). The double-modulo keeps the
+ * index in range for multi-step moves too, where a single modulo
+ * could go negative under C's truncating division.
+ */
+static bool move_selection(struct app_state *state, int step)
 {
-	if (state->song_count == 0)
+	if (state->song_count == 0 || step == 0)
 	{
-		return;
+		return false;
 	}
 
-	state->selected_index = (state->selected_index + step + state->song_count) % state->song_count;
+	state->selected_index = ((state->selected_index + step) % state->song_count + state->song_count) % state->song_count;
 	state->ui_dirty = true;
 	state->list_dirty = true;
+	return true;
 }
 
 static void handle_buttons(struct app_state *state)
@@ -129,14 +136,28 @@ int main(void)
 		return ret;
 	}
 
+	ret = init_knob();
+	if (ret)
+	{
+		LOG_ERR("Knob init failed: %d", ret);
+		return ret;
+	}
+
 	ui_refresh(&app);
 
 	while (1)
 	{
 		bool did_ui_refresh = false;
+		int knob_steps;
 		int64_t now_ms;
 
 		handle_buttons(&app);
+
+		knob_steps = knob_poll();
+		if (knob_steps != 0 && move_selection(&app, knob_steps))
+		{
+			knob_haptic_pulse();
+		}
 
 		if (app.ui_dirty)
 		{
