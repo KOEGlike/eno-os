@@ -13,6 +13,5 @@ int prefill_and_start(struct app_state *state);
 int start_selected_song(struct app_state *state);
 int pause_song(struct app_state *state);
 int resume_song(struct app_state *state);
-void process_playback(struct app_state *state);
 
 

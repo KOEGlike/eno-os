@@ -13,7 +13,11 @@
 #define INITIAL_BLOCKS 16
 #define TIMEOUT 2000
 #define BLOCK_SIZE (BYTES_PER_SAMPLE * SAMPLES_PER_BLOCK)
-#define BLOCK_COUNT (INITIAL_BLOCKS + 8)
+/* Slab deeper than the driver msgq (CONFIG_I2S_NRFX_TX_BLOCK_COUNT=24):
+ * the pump then blocks inside i2s_buf_write for pacing instead of
+ * racing the DMA for freed blocks
+ */
+#define BLOCK_COUNT (INITIAL_BLOCKS + 20)
 #define PROGRESS_UI_UPDATE_MS 10000
 #define PROGRESS_UI_STEP_PCT 10
 

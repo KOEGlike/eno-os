@@ -53,5 +53,13 @@ struct audio_decoder {
 int decoder_open(struct audio_decoder *dec, struct fs_file_t *file, uint32_t file_size);
 void decoder_close(struct audio_decoder *dec);
 
+/*
+ * Top up the decoder's internal input buffer from the file. Call
+ * regularly (e.g. before each block fill): the SD read stall then
+ * lands while the audio queue is still full instead of when the
+ * decoder is about to run dry.
+ */
+void decoder_prefetch(struct audio_decoder *dec);
+
 /* Returns the number of stereo frames written to dst (0 = end of stream). */
 size_t decoder_fill(struct audio_decoder *dec, int16_t *dst, size_t max_frames);

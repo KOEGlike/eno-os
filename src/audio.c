@@ -3,6 +3,7 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/audio/codec.h>
+#include <zephyr/sys/atomic.h>
 #include <zephyr/fs/fs.h>
 #include <string.h>
 
@@ -25,6 +26,20 @@ K_MEM_SLAB_DEFINE_IN_SECT_STATIC(mem_slab, __nocache, BLOCK_SIZE, BLOCK_COUNT, 4
 static struct audio_decoder decoder;
 static uint32_t song_block_bytes = BLOCK_SIZE;
 
+/* Playback pump: decoding runs in its own thread so e-ink UI
+ * refreshes (which block the main thread for seconds) can't starve
+ * the I2S queue.
+ */
+static struct app_state *audio_state;
+static atomic_t pump_active;
+static K_SEM_DEFINE(audio_start_sem, 0, 1);
+
+static void audio_stop_nolock(struct app_state *state, bool close_file, bool drop);
+static void audio_thread_fn(void *a, void *b, void *c);
+
+K_THREAD_DEFINE(audio_thread, 6144, audio_thread_fn, NULL, NULL, NULL,
+		K_PRIO_PREEMPT(1), 0, 0);
+
 static struct i2s_config i2s_cfg = {
 	.word_size = SAMPLE_BIT_WIDTH,
 	.channels = NUMBER_OF_CHANNELS,
@@ -46,6 +61,18 @@ static struct audio_codec_cfg codec_cfg = {
 	.dai_route = AUDIO_ROUTE_PLAYBACK,
 };
 
+/* The nrfx driver reports a spurious "buffers not supplied" error
+ * shortly after a DROP (the deferred stop event lands once we are
+ * already back in READY) which latches I2S_STATE_ERROR. DROP then
+ * PREPARE gets back to READY and clears the pending event window.
+ */
+static void i2s_force_ready(void)
+{
+	(void)i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_DROP);
+	k_sleep(K_MSEC(20));
+	(void)i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_PREPARE);
+}
+
 static int configure_stream(uint32_t sample_rate)
 {
 	uint32_t block_bytes;
@@ -63,13 +90,23 @@ static int configure_stream(uint32_t sample_rate)
 	 */
 	audio_codec_stop_output(codec_dev);
 
+	i2s_force_ready();
+
 	i2s_cfg.frame_clk_freq = sample_rate;
 	i2s_cfg.block_size = song_block_bytes;
 	ret = i2s_configure(i2s_dev, I2S_DIR_TX, &i2s_cfg);
 	if (ret < 0)
 	{
-		LOG_ERR("I2S reconfigure failed for %u Hz: %d", sample_rate, ret);
-		return ret;
+		/* a stale driver event may have landed between force_ready
+		 * and configure; force again and retry once
+		 */
+		i2s_force_ready();
+		ret = i2s_configure(i2s_dev, I2S_DIR_TX, &i2s_cfg);
+		if (ret < 0)
+		{
+			LOG_ERR("I2S reconfigure failed for %u Hz: %d", sample_rate, ret);
+			return ret;
+		}
 	}
 
 	codec_cfg.dai_cfg.i2s.frame_clk_freq = sample_rate;
@@ -135,7 +172,89 @@ int init_audio(void)
 	return 0;
 }
 
+static void audio_thread_fn(void *a, void *b, void *c)
+{
+	ARG_UNUSED(a);
+	ARG_UNUSED(b);
+	ARG_UNUSED(c);
+
+	while (true)
+	{
+		k_sem_take(&audio_start_sem, K_FOREVER);
+
+		if (audio_state == NULL ||
+			audio_state->playback_state != PLAYBACK_PLAYING ||
+			!audio_state->file_open)
+		{
+			continue;
+		}
+
+		atomic_set(&pump_active, 1);
+
+		int ret = prefill_and_start(audio_state);
+		if (ret)
+		{
+			LOG_ERR("Prefill failed: %d", ret);
+			atomic_set(&pump_active, 0);
+			audio_stop_nolock(audio_state, true, true);
+			continue;
+		}
+
+		bool eof = false;
+		while (audio_state->playback_state == PLAYBACK_PLAYING &&
+			   audio_state->file_open)
+		{
+			ret = queue_one_block(audio_state, &eof);
+			if (ret == -ENOMEM || ret == -EAGAIN || ret == -EBUSY || ret == -ENOMSG)
+			{
+				/* queue full: ahead of playback */
+				k_sleep(K_MSEC(10));
+				continue;
+			}
+			if (ret)
+			{
+ 				if (audio_state->playback_state == PLAYBACK_PLAYING)
+ 				{
+ 					LOG_ERR("Playback error: %d", ret);
+ 					atomic_set(&pump_active, 0);
+ 					audio_stop_nolock(audio_state, true, true);
+ 				}
+				else
+				{
+					LOG_INF("pump write err after stop: %d", ret);
+				}
+ 				break;
+ 			}
+ 			if (eof)
+ 			{
+ 				/* drain so the tail isn't cut off */
+				LOG_INF("pump: eof, draining");
+ 				atomic_set(&pump_active, 0);
+ 				audio_stop_nolock(audio_state, true, false);
+ 				break;
+ 			}
+ 		}
+
+		LOG_INF("pump exit: state %d eof %d", audio_state->playback_state, eof);
+ 		atomic_set(&pump_active, 0);
+ 	}
+ }
+
 void stop_playback(struct app_state *state, bool close_file, bool drop)
+{
+	/* signal the pump first, then wait for it to leave the decoder
+	 * before tearing it down
+	 */
+	state->playback_state = PLAYBACK_STOPPED;
+	while (atomic_get(&pump_active))
+	{
+		k_msleep(2);
+	}
+
+	audio_stop_nolock(state, close_file, drop);
+}
+
+static void audio_stop_nolock(struct app_state *state, bool close_file, bool drop)
 {
 	if (drop)
 	{
@@ -166,27 +285,37 @@ void stop_playback(struct app_state *state, bool close_file, bool drop)
 	state->list_dirty = true;
 }
 
+static int64_t fill_t0;
+static uint8_t audio_scratch[BLOCK_SIZE];
+
 int queue_one_block(struct app_state *state, bool *eof)
 {
-	void *block;
 	size_t frames;
 	size_t bytes;
 	int64_t now_ms;
+	static uint32_t fill_count;
+	int64_t fill_ms;
 	int ret;
 
 	*eof = false;
 
-	ret = k_mem_slab_alloc(&mem_slab, &block, K_NO_WAIT);
-	if (ret)
+	/* SD refills stall for hundreds of ms; do them while the queue
+	 * is still full so playback rides on buffered blocks
+	 */
+	decoder_prefetch(&decoder);
+
+	(void)k_uptime_delta(&fill_t0);
+	frames = decoder_fill(&decoder, (int16_t *)audio_scratch, song_block_bytes / 4);
+	fill_ms = (k_uptime_delta(&fill_t0) + 500) / 1000;
+
+	if ((++fill_count & 0x0f) == 1)
 	{
-		/* queue full: we are ahead of playback, try again later */
-		return ret;
+		LOG_INF("fill: %u frames in %d ms, %d blocks free",
+			frames, (int)fill_ms, k_mem_slab_num_free_get(&mem_slab));
 	}
 
-	frames = decoder_fill(&decoder, (int16_t *)block, song_block_bytes / 4);
 	if (frames == 0)
 	{
-		k_mem_slab_free(&mem_slab, block);
 		*eof = true;
 		return 0;
 	}
@@ -194,14 +323,16 @@ int queue_one_block(struct app_state *state, bool *eof)
 	bytes = frames * 4;
 	if (bytes < song_block_bytes)
 	{
-		memset((uint8_t *)block + bytes, 0, song_block_bytes - bytes);
+		memset(audio_scratch + bytes, 0, song_block_bytes - bytes);
 	}
 
-	/* ownership of the block moves to the I2S driver */
-	ret = i2s_buf_write(i2s_dev, block, song_block_bytes);
+	/* i2s_buf_write copies the scratch into its own slab block
+	 * (blocking for pacing while the queue is full) and hands it
+	 * to the driver
+	 */
+	ret = i2s_buf_write(i2s_dev, audio_scratch, song_block_bytes);
 	if (ret < 0)
 	{
-		k_mem_slab_free(&mem_slab, block);
 		return ret;
 	}
 
@@ -233,25 +364,32 @@ int prefill_and_start(struct app_state *state)
 		ret = queue_one_block(state, &eof);
 		if (ret == -ENOMEM || ret == -EAGAIN || ret == -EBUSY || ret == -ENOMSG)
 		{
+			LOG_INF("prefill blocked at %d: %d", queued, ret);
 			break;
 		}
 		if (ret)
 		{
+			LOG_ERR("prefill error at %d: %d", queued, ret);
 			return ret;
 		}
 		if (eof)
 		{
+			LOG_INF("prefill eof at %d", queued);
 			break;
 		}
 		queued++;
-	}	if (queued == 0)
+	}
+
+	if (queued == 0)
 	{
 		return -ENODATA;
 	}
 
+	LOG_INF("prefill done: %d blocks, starting", queued);
 	ret = i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_START);
 	if (ret < 0)
 	{
+		LOG_ERR("I2S start failed: %d", ret);
 		return ret;
 	}
 
@@ -325,12 +463,9 @@ int start_selected_song(struct app_state *state)
 	state->ui_dirty = true;
 	state->list_dirty = true;
 
-	ret = prefill_and_start(state);
-	if (ret)
-	{
-		stop_playback(state, true, true);
-		return ret;
-	}
+	/* hand playback over to the pump thread */
+	audio_state = state;
+	k_sem_give(&audio_start_sem);
 
 	return 0;
 }
@@ -358,58 +493,18 @@ int pause_song(struct app_state *state)
 
 int resume_song(struct app_state *state)
 {
-	int ret;
-
 	if (state->playback_state != PLAYBACK_PAUSED || !state->file_open)
 	{
 		return 0;
 	}
 
-	ret = prefill_and_start(state);
-	if (ret)
-	{
-		stop_playback(state, true, true);
-		return ret;
-	}
-
 	state->playback_state = PLAYBACK_PLAYING;
 	state->last_progress_ui_ms = 0;
 	state->ui_dirty = true;
+
+	/* the decoder keeps its position; the pump continues from there */
+	audio_state = state;
+	k_sem_give(&audio_start_sem);
 	return 0;
 }
 
-void process_playback(struct app_state *state)
-{
-	bool eof = false;
-	int ret;
-
-	if (state->playback_state != PLAYBACK_PLAYING || !state->file_open)
-	{
-		return;
-	}
-
-	/* keep the I2S queue topped up; each block costs one SD read
-	 * plus decode time, so do a few per loop iteration
-	 */
-	for (int i = 0; i < 4; i++)
-	{
-		ret = queue_one_block(state, &eof);
-		if (ret == -ENOMEM || ret == -EAGAIN || ret == -EBUSY || ret == -ENOMSG)
-		{
-			return;
-		}
-		if (ret)
-		{
-			LOG_ERR("Playback error: %d", ret);
-			stop_playback(state, true, true);
-			return;
-		}
-
-		if (eof)
-		{
-			/* drain the queued blocks so the tail isn't cut off */
-			stop_playback(state, true, false);
-			return;
-		}
-	}
-}

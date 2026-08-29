@@ -24,11 +24,39 @@ static struct gpio_callback power_cb;
 static struct gpio_callback left_cb;
 static struct gpio_callback right_cb;
 
+/* The DT debounce-interval only applies to the gpio-keys subsystem,
+ * which this raw GPIO driver does not use — bounce filtering has to
+ * happen here. A mechanical switch settles in <10 ms; 100 ms also
+ * rate-limits the navigation buttons comfortably.
+ */
+#define BUTTON_DEBOUNCE_MS 100
+
+static int64_t power_last_ms;
+static int64_t left_last_ms;
+static int64_t right_last_ms;
+
+static bool button_debounce(int64_t *last_ms)
+{
+	int64_t now = k_uptime_get();
+
+	if (now - *last_ms < BUTTON_DEBOUNCE_MS)
+	{
+		return false;
+	}
+	*last_ms = now;
+	return true;
+}
+
 static void button_power_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
 	ARG_UNUSED(dev);
 	ARG_UNUSED(cb);
 	ARG_UNUSED(pins);
+
+	if (!button_debounce(&power_last_ms))
+	{
+		return;
+	}
 	atomic_inc(&power_events);
 }
 
@@ -37,6 +65,11 @@ static void button_left_pressed(const struct device *dev, struct gpio_callback *
 	ARG_UNUSED(dev);
 	ARG_UNUSED(cb);
 	ARG_UNUSED(pins);
+
+	if (!button_debounce(&left_last_ms))
+	{
+		return;
+	}
 	atomic_inc(&left_events);
 }
 
@@ -45,6 +78,11 @@ static void button_right_pressed(const struct device *dev, struct gpio_callback 
 	ARG_UNUSED(dev);
 	ARG_UNUSED(cb);
 	ARG_UNUSED(pins);
+
+	if (!button_debounce(&right_last_ms))
+	{
+		return;
+	}
 	atomic_inc(&right_events);
 }
 

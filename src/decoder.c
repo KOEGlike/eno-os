@@ -10,7 +10,7 @@
 
 LOG_MODULE_REGISTER(decoder, LOG_LEVEL_INF);
 
-#define MP3_RING_SIZE		8192
+#define MP3_RING_SIZE		32768
 #define WAV_RAW_BUF_SIZE	6400
 #define MP3_GRANULE_MAX		1152
 
@@ -261,6 +261,8 @@ static int mp3_refill(struct audio_decoder *dec)
 {
 	ssize_t n;
 	int ret;
+	static uint32_t refill_count;
+	int64_t t0 = k_uptime_get();
 
 	if (dec->file_exhausted) {
 		return 0;
@@ -287,6 +289,9 @@ static int mp3_refill(struct audio_decoder *dec)
 		dec->file_exhausted = true;
 		return 0;
 	}
+
+	LOG_INF("refill %u bytes in %d ms", (uint32_t)n,
+		(int)(k_uptime_get() - t0));
 
 	dec->file_read_total += (uint32_t)n;
 	dec->ring_len += (uint32_t)n;
@@ -537,6 +542,21 @@ void decoder_close(struct audio_decoder *dec)
 		MP3FreeDecoder(dec->mp3);
 	}
 	memset(dec, 0, sizeof(*dec));
+}
+
+void decoder_prefetch(struct audio_decoder *dec)
+{
+	if (!dec->opened || dec->format != AUDIO_FILE_MP3 || dec->file_exhausted) {
+		return;
+	}
+
+	/* refill while the ring still holds half its data: the SD read
+	 * latency is then covered by the I2S queue instead of causing
+	 * a race against an emptying buffer
+	 */
+	if (dec->ring_len - dec->ring_pos < MP3_RING_SIZE / 2) {
+		(void)mp3_refill(dec);
+	}
 }
 
 size_t decoder_fill(struct audio_decoder *dec, int16_t *dst, size_t max_frames)

@@ -128,9 +128,9 @@ int main(void)
 	{
 		bool did_ui_refresh = false;
 		int64_t now_ms;
+		int64_t iter_t0 = k_uptime_get();
 
 		handle_buttons(&app);
-		process_playback(&app);
 
 		if (app.ui_dirty)
 		{
@@ -141,6 +141,10 @@ int main(void)
 		}
 
 		now_ms = k_uptime_get();
+		if ((now_ms - iter_t0) > 200)
+		{
+			LOG_INF("main iteration stalled %d ms", (int)(now_ms - iter_t0));
+		}
 		if ((app.playback_state != PLAYBACK_PLAYING || did_ui_refresh) &&
 			(now_ms - last_lvgl_handler_ms) >= 50)
 		{

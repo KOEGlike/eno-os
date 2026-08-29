@@ -182,11 +182,11 @@
     pinctrl-1 = <&spi4_sleep>;
     pinctrl-names = "default", "sleep";
 
-    sdhc0: sdhc@0 {
-        compatible = "zephyr,sdhc-spi-slot";
-        reg = <0>;
-        status = "okay";
-        spi-max-frequency = <8000000>;
+	sdhc0: sdhc@0 {
+		compatible = "zephyr,sdhc-spi-slot";
+		reg = <0>;
+		status = "okay";
+		spi-max-frequency = <8000000>;
 
         sdmmc {
             compatible = "zephyr,sdmmc-disk";
