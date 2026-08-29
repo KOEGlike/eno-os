@@ -6,4 +6,6 @@
  */
 int init_knob(void);
 int knob_poll(void);
+/* Drop any accumulated but unreported rotation */
+void knob_discard(void);
 void knob_haptic_pulse(void);

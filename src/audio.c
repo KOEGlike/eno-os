@@ -42,9 +42,35 @@ static uint32_t song_block_bytes = BLOCK_SIZE;
 static struct app_state *audio_state;
 static atomic_t pump_active;
 static K_SEM_DEFINE(audio_start_sem, 0, 1);
+/* consecutive unplayable-file auto-skips */
+static int prefill_failures;
+
+/* Keep the driver queue this deep at most: pause (which purges the
+ * queue and resumes from the decoder position) then only skips about
+ * this much audio, and the displayed progress stays within ~1 s of
+ * what is audible. Must stay comfortably above the refill latency
+ * of the SD card.
+ */
+#define QUEUE_SOFT_LIMIT 8
 
 static void audio_stop_nolock(struct app_state *state, bool close_file, bool drop);
 static void audio_thread_fn(void *a, void *b, void *c);
+
+/* DRAIN only arms the stop; the queued tail keeps playing while the
+ * driver transitions to READY asynchronously. Wait for the tail by
+ * polling the slab: every played block is freed back, so once all
+ * blocks are free the queue is fully drained.
+ */
+static void wait_tail_played(void)
+{
+	int waited_ms = 0;
+
+	while (k_mem_slab_num_free_get(&mem_slab) < BLOCK_COUNT && waited_ms < 5000)
+	{
+		k_sleep(K_MSEC(20));
+		waited_ms += 20;
+	}
+}
 
 K_THREAD_DEFINE(audio_thread, 6144, audio_thread_fn, NULL, NULL, NULL,
 		K_PRIO_PREEMPT(1), 0, 0);
@@ -191,28 +217,59 @@ static void audio_thread_fn(void *a, void *b, void *c)
 	{
 		k_sem_take(&audio_start_sem, K_FOREVER);
 
+		/* claim pump_active before touching shared state: main's
+		 * stop_playback waits on this flag, so it must already be
+		 * set when the state checks below could make us exit
+		 */
+		atomic_set(&pump_active, 1);
+
 		if (audio_state == NULL ||
 			audio_state->playback_state != PLAYBACK_PLAYING ||
 			!audio_state->file_open)
 		{
+			atomic_set(&pump_active, 0);
 			continue;
 		}
 
-		atomic_set(&pump_active, 1);
-
 		int ret = prefill_and_start(audio_state);
+		if (ret == -ECANCELED)
+		{
+			/* paused/stopped while prefilling: exit quietly,
+			 * the state owner already handled the stream
+			 */
+			atomic_set(&pump_active, 0);
+			continue;
+		}
 		if (ret)
 		{
 			LOG_ERR("Prefill failed: %d", ret);
-			atomic_set(&pump_active, 0);
 			audio_stop_nolock(audio_state, true, true);
+			/* auto-advance past unplayable tracks (bounded so
+			 * an all-bad folder does not loop hot)
+			 */
+			if (++prefill_failures < 8)
+			{
+				atomic_set(&audio_state->advance_request, 1);
+			}
+			atomic_set(&pump_active, 0);
 			continue;
 		}
+		prefill_failures = 0;
 
 		bool eof = false;
 		while (audio_state->playback_state == PLAYBACK_PLAYING &&
 			   audio_state->file_open)
 		{
+			if (BLOCK_COUNT - k_mem_slab_num_free_get(&mem_slab) >= QUEUE_SOFT_LIMIT)
+			{
+				/* enough audio queued: pace here instead of
+				 * filling the queue to the brim (bounds the
+				 * pause/resume skip)
+				 */
+				k_sleep(K_MSEC(10));
+				continue;
+			}
+
 			ret = queue_one_block(audio_state, &eof);
 			if (ret == -ENOMEM || ret == -EAGAIN || ret == -EBUSY || ret == -ENOMSG)
 			{
@@ -225,8 +282,14 @@ static void audio_thread_fn(void *a, void *b, void *c)
  				if (audio_state->playback_state == PLAYBACK_PLAYING)
  				{
  					LOG_ERR("Playback error: %d", ret);
- 					atomic_set(&pump_active, 0);
+ 					/* teardown first, then drop pump_active:
+ 					 * main's stop_playback waits for
+ 					 * pump_active, so clearing it before the
+ 					 * teardown would let main race the
+ 					 * decoder/i2s cleanup
+ 					 */
  					audio_stop_nolock(audio_state, true, true);
+ 					atomic_set(&pump_active, 0);
  				}
 				else
 				{
@@ -234,14 +297,27 @@ static void audio_thread_fn(void *a, void *b, void *c)
 				}
  				break;
  			}
- 			if (eof)
- 			{
- 				/* drain so the tail isn't cut off */
+  			if (eof)
+  			{
+  				/* arm the stop, let the queued tail play out
+  				 * (wait_tail_played), then tear down and
+  				 * hand over to auto-advance. The advance
+  				 * request is only made if the song was
+  				 * still playing at that point (a pause or
+  				 * stop during the tail is user intent and
+  				 * must not trigger it)
+  				*/
 				LOG_INF("pump: eof, draining");
- 				atomic_set(&pump_active, 0);
- 				audio_stop_nolock(audio_state, true, false);
- 				break;
- 			}
+				(void)i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_DRAIN);
+				wait_tail_played();
+				if (audio_state->playback_state == PLAYBACK_PLAYING)
+				{
+					atomic_set(&audio_state->advance_request, 1);
+				}
+				audio_stop_nolock(audio_state, true, false);
+				atomic_set(&pump_active, 0);
+				break;
+			}
  		}
 
 		LOG_INF("pump exit: state %d eof %d", audio_state->playback_state, eof);
@@ -252,12 +328,21 @@ static void audio_thread_fn(void *a, void *b, void *c)
 void stop_playback(struct app_state *state, bool close_file, bool drop)
 {
 	/* signal the pump first, then wait for it to leave the decoder
-	 * before tearing it down
+	 * before tearing it down (bounded: a pump that never exits must
+	 * not hang the main thread forever)
 	 */
 	state->playback_state = PLAYBACK_STOPPED;
-	while (atomic_get(&pump_active))
+
+	int waited_ms = 0;
+
+	while (atomic_get(&pump_active) && waited_ms < 10000)
 	{
 		k_msleep(2);
+		waited_ms += 2;
+	}
+	if (atomic_get(&pump_active))
+	{
+		LOG_ERR("pump did not exit; tearing down anyway");
 	}
 
 	audio_stop_nolock(state, close_file, drop);
@@ -285,18 +370,15 @@ static void audio_stop_nolock(struct app_state *state, bool close_file, bool dro
 	}
 
 	state->playback_state = PLAYBACK_STOPPED;
-	state->playing_index = -1;
 	state->elapsed_s = 0;
 	state->total_s = 0;
 	state->last_progress_ui_ms = 0;
 	state->ui_dirty = true;
-	state->list_dirty = true;
 }
 
 
 int queue_one_block(struct app_state *state, bool *eof)
 {
-	void *block;
 	size_t frames;
 	size_t bytes;
 	int64_t now_ms;
@@ -351,6 +433,12 @@ int prefill_and_start(struct app_state *state)
 
 	for (int i = 0; i < INITIAL_BLOCKS; i++)
 	{
+		/* a pause/stop during prefill must not start the stream */
+		if (state->playback_state != PLAYBACK_PLAYING)
+		{
+			return -ECANCELED;
+		}
+
 		bool eof = false;
 		ret = queue_one_block(state, &eof);
 		if (ret == -ENOMEM || ret == -EAGAIN || ret == -EBUSY || ret == -ENOMSG)
@@ -369,6 +457,11 @@ int prefill_and_start(struct app_state *state)
 			break;
 		}
 		queued++;
+	}
+
+	if (state->playback_state != PLAYBACK_PLAYING)
+	{
+		return -ECANCELED;
 	}
 
 	if (queued == 0)
@@ -419,19 +512,19 @@ int audio_volume_step(int step_db)
 	return 0;
 }
 
-int start_selected_song(struct app_state *state)
+int start_song(struct app_state *state, const char *path)
 {
 	off_t file_size;
 	int ret;
 
-	if (state->song_count == 0)
+	if (path == NULL || path[0] == '\0')
 	{
 		return -ENOENT;
 	}
 
 	stop_playback(state, true, true);
 
-	ret = sd_card_open(state->songs[state->selected_index], &state->file);
+	ret = sd_card_open(path, &state->file);
 	if (ret)
 	{
 		return ret;
@@ -462,12 +555,12 @@ int start_selected_song(struct app_state *state)
 	ret = decoder_open(&decoder, &state->file, (uint32_t)file_size);
 	if (ret)
 	{
-		LOG_ERR("Failed to open %s: %d", state->songs[state->selected_index], ret);
+		LOG_ERR("Failed to open %s: %d", path, ret);
 		stop_playback(state, true, true);
 		return ret;
 	}
 
-	LOG_INF("%s: %u Hz", state->songs[state->selected_index], decoder.sample_rate);
+	LOG_INF("%s: %u Hz", path, decoder.sample_rate);
 
 	ret = configure_stream(decoder.sample_rate);
 	if (ret)
@@ -476,13 +569,11 @@ int start_selected_song(struct app_state *state)
 		return ret;
 	}
 
-	state->playing_index = state->selected_index;
 	state->elapsed_s = 0;
 	state->total_s = decoder.total_ms / 1000;
 	state->last_progress_ui_ms = 0;
 	state->playback_state = PLAYBACK_PLAYING;
 	state->ui_dirty = true;
-	state->list_dirty = true;
 
 	/* hand playback over to the pump thread */
 	audio_state = state;
@@ -500,14 +591,20 @@ int pause_song(struct app_state *state)
 		return 0;
 	}
 
+	/* go PAUSED before the DROP: the pump may be inside
+	 * i2s_buf_write and must see the paused state when the write
+	 * errors out, otherwise it tears the song down
+	 */
+	state->playback_state = PLAYBACK_PAUSED;
+
 	ret = i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_DROP);
 	if (ret < 0)
 	{
+		state->playback_state = PLAYBACK_PLAYING;
 		return ret;
 	}
 
 	state->i2s_started = false;
-	state->playback_state = PLAYBACK_PAUSED;
 	state->ui_dirty = true;
 	return 0;
 }

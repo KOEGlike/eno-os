@@ -390,10 +390,14 @@ static bool mp3_decode_next(struct audio_decoder *dec)
 			}
 			dec->src_channels = (uint8_t)info.nChans;
 			if (!dec->synced) {
+				uint32_t audio_bytes = dec->file_size - dec->audio_start;
+
 				dec->sample_rate = (uint32_t)info.samprate;
-				/* CBR duration estimate from the bitrate */
-				dec->total_ms = (info.bitrate > 0)
-					? (uint32_t)((uint64_t)dec->file_size * 8000 / info.bitrate)
+				/* CBR duration estimate from the bitrate,
+				 * excluding the ID3v2 tag bytes
+				 */
+				dec->total_ms = (info.bitrate > 0 && audio_bytes > 0)
+					? (uint32_t)((uint64_t)audio_bytes * 8000 / info.bitrate)
 					: 0;
 				dec->synced = true;
 				LOG_INF("MP3: %d Hz, %d ch, layer %d, %d kbps",
@@ -512,10 +516,14 @@ static int mp3_parse(struct audio_decoder *dec)
 		if (ret < 0) {
 			return ret;
 		}
-	} else if (n > 0) {
-		ret = fs_seek(dec->file, 0, FS_SEEK_SET);
-		if (ret < 0) {
-			return ret;
+		dec->audio_start = (skip < dec->file_size) ? skip : dec->file_size;
+	} else {
+		dec->audio_start = 0;
+		if (n > 0) {
+			ret = fs_seek(dec->file, 0, FS_SEEK_SET);
+			if (ret < 0) {
+				return ret;
+			}
 		}
 	}
 

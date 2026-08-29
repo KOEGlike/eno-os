@@ -26,6 +26,10 @@ struct audio_decoder {
 	/* internal */
 	struct fs_file_t *file;
 	uint32_t file_size;
+	/* offset of the first audio byte (ID3v2 tag size for MP3):
+	 * duration estimates must not count tag bytes
+	 */
+	uint32_t audio_start;
 	bool opened;
 	bool file_exhausted;
 	uint32_t file_read_total;

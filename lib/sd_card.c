@@ -434,25 +434,39 @@ int sd_card_open(char const *const filename, struct fs_file_t *f_seg_read_entry)
     int ret;
     char abs_path_name[PATH_MAX_LEN + 1] = SD_ROOT_PATH;
     size_t available_path_space = PATH_MAX_LEN - strlen(SD_ROOT_PATH);
+    const char *rel_name = filename;
 
     if (!sd_init_success)
     {
         return -ENODEV;
     }
 
-    if (strlen(filename) > CONFIG_FS_FATFS_MAX_LFN)
+    /* Tolerate mount-absolute paths ("/SD:/foo.mp3"): the caller may
+     * hold full VFS paths from directory listings; strip the prefix
+     * so the root path is not concatenated twice
+     */
+    if (strncmp(rel_name, SD_ROOT_PATH, strlen(SD_ROOT_PATH)) == 0)
+    {
+        rel_name += strlen(SD_ROOT_PATH);
+    }
+    else if (strncmp(rel_name, sd_root_path, strlen(sd_root_path)) == 0)
+    {
+        rel_name += strlen(sd_root_path);
+    }
+
+    if (strlen(rel_name) > CONFIG_FS_FATFS_MAX_LFN)
     {
         LOG_ERR("Filename is too long");
         return -ENAMETOOLONG;
     }
 
-    if ((strlen(abs_path_name) + strlen(filename)) > PATH_MAX_LEN)
+    if ((strlen(abs_path_name) + strlen(rel_name)) > PATH_MAX_LEN)
     {
         LOG_ERR("Filepath is too long");
         return -EINVAL;
     }
 
-    strncat(abs_path_name, filename, available_path_space);
+    strncat(abs_path_name, rel_name, available_path_space);
 
     LOG_INF("Opening SD file");
 

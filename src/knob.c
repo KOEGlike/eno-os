@@ -117,6 +117,11 @@ int init_knob(void)
 	return 0;
 }
 
+void knob_discard(void)
+{
+	angle_accum = 0;
+}
+
 void knob_haptic_pulse(void)
 {
 	int ret = led_set_brightness_dt(&vib_motor, HAPTIC_BRIGHTNESS_PCT);

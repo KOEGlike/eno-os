@@ -79,9 +79,16 @@ static void button_edge(const struct device *dev, struct gpio_callback *cb, uint
 	struct button *btn = CONTAINER_OF(cb, struct button, cb);
 	bool active = gpio_pin_get_dt(&btn->spec) == 1;
 
-	if (active && atomic_get(&btn->waiting_release))
+	if (!active)
 	{
-		/* Still held (double-make, jitter): a second press is
+		/* release edge: re-arm immediately so a fast re-press
+		 * (before the release confirm ran) is not swallowed
+		 */
+		atomic_set(&btn->waiting_release, 0);
+	}
+	else if (atomic_get(&btn->waiting_release))
+	{
+		/* still held (double-make, jitter): a second press is
 		 * only accepted after a confirmed release
 		 */
 		return;
@@ -140,11 +147,18 @@ int init_buttons(void)
 
 static int take_events(atomic_t *counter)
 {
+	/* CAS loop: an event confirmed between the get and the clear
+	 * (sysworkq vs main thread) must not be swallowed
+	 */
 	int value = atomic_get(counter);
 
-	if (value > 0)
+	while (value > 0)
 	{
-		atomic_set(counter, 0);
+		if (atomic_cas(counter, value, 0))
+		{
+			break;
+		}
+		value = atomic_get(counter);
 	}
 
 	return value;

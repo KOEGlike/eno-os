@@ -20,7 +20,11 @@ target_sources(app PRIVATE
   src/knob.c
   src/audio.c
   src/ui.c
-  src/songs.c
+  src/i1_decoder.c
+  src/browser.c
+  src/metadata.c
+  src/art.c
+  src/icons.c
   src/decoder.c
   lib/sd_card.c
   lib/helix/mp3dec.c
