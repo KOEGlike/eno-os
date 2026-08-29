@@ -18,6 +18,14 @@ static const struct device *codec_dev = DEVICE_DT_GET(CODEC_NODE);
 /* Matches the listening level the retired PurePath register dump used */
 #define DAC_DEFAULT_VOLUME_DB (-8)
 
+/* The DAC supports -100..+27 dB, but boosting above 0 dB scales full
+ * scale samples up before the fixed analog gain and clips
+ */
+#define DAC_VOLUME_MIN_DB (-100)
+#define DAC_VOLUME_MAX_DB 0
+
+static int volume_db = DAC_DEFAULT_VOLUME_DB;
+
 #define I2S_NODE DT_NODELABEL(i2s0)
 static const struct device *i2s_dev = DEVICE_DT_GET(I2S_NODE);
 
@@ -377,6 +385,37 @@ int prefill_and_start(struct app_state *state)
 	}
 
 	state->i2s_started = true;
+	return 0;
+}
+
+int audio_volume_step(int step_db)
+{
+	int ret;
+	audio_property_value_t val;
+	int new_db = CLAMP(volume_db + step_db, DAC_VOLUME_MIN_DB, DAC_VOLUME_MAX_DB);
+
+	if (new_db == volume_db)
+	{
+		return 0;
+	}
+
+	val.vol = new_db;
+	ret = audio_codec_set_property(codec_dev, AUDIO_PROPERTY_OUTPUT_VOLUME, AUDIO_CHANNEL_ALL, val);
+	if (ret)
+	{
+		LOG_ERR("Codec volume set failed: %d", ret);
+		return ret;
+	}
+
+	ret = audio_codec_apply_properties(codec_dev);
+	if (ret)
+	{
+		LOG_ERR("Codec volume apply failed: %d", ret);
+		return ret;
+	}
+
+	volume_db = new_db;
+	LOG_INF("Volume: %d dB", volume_db);
 	return 0;
 }
 

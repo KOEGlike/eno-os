@@ -93,6 +93,18 @@ static void handle_buttons(struct app_state *state)
 	{
 		move_selection(state, 1);
 	}
+
+	events = buttons_take_volume_up_events();
+	for (int i = 0; i < events; i++)
+	{
+		audio_volume_step(AUDIO_VOLUME_STEP_DB);
+	}
+
+	events = buttons_take_volume_down_events();
+	for (int i = 0; i < events; i++)
+	{
+		audio_volume_step(-AUDIO_VOLUME_STEP_DB);
+	}
 }
 
 int main(void)

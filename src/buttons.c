@@ -12,6 +12,8 @@ LOG_MODULE_REGISTER(BUTTONS, LOG_LEVEL_INF);
 #define BUTTON_POWER_NODE DT_NODELABEL(button_power)
 #define BUTTON_LEFT_NODE DT_NODELABEL(button_side_left)
 #define BUTTON_RIGHT_NODE DT_NODELABEL(button_side_right)
+#define BUTTON_VOL_UP_NODE DT_NODELABEL(button_volume_up)
+#define BUTTON_VOL_DOWN_NODE DT_NODELABEL(button_volume_down)
 
 /* Edges are not trusted directly: after an edge, the line must stay
  * settled this long before the pin level is sampled to decide what
@@ -38,6 +40,12 @@ static struct button button_left = {
 };
 static struct button button_right = {
 	.spec = GPIO_DT_SPEC_GET(BUTTON_RIGHT_NODE, gpios),
+};
+static struct button button_vol_up = {
+	.spec = GPIO_DT_SPEC_GET(BUTTON_VOL_UP_NODE, gpios),
+};
+static struct button button_vol_down = {
+	.spec = GPIO_DT_SPEC_GET(BUTTON_VOL_DOWN_NODE, gpios),
 };
 
 /* Runs on the system workqueue, BUTTON_CONFIRM_DELAY_MS after the
@@ -91,6 +99,8 @@ int init_buttons(void)
 		&button_power,
 		&button_left,
 		&button_right,
+		&button_vol_up,
+		&button_vol_down,
 	};
 	int ret;
 
@@ -153,4 +163,14 @@ int buttons_take_left_events(void)
 int buttons_take_right_events(void)
 {
 	return take_events(&button_right.events);
+}
+
+int buttons_take_volume_up_events(void)
+{
+	return take_events(&button_vol_up.events);
+}
+
+int buttons_take_volume_down_events(void)
+{
+	return take_events(&button_vol_down.events);
 }
