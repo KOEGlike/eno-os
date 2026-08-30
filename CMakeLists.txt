@@ -26,6 +26,7 @@ target_sources(app PRIVATE
   src/art.c
   src/icons.c
   src/decoder.c
+  src/flac.c
   lib/sd_card.c
   lib/helix/mp3dec.c
   lib/helix/mp3tabs.c
@@ -51,8 +52,8 @@ target_include_directories(app PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/lib/helix/real
 )
 
-# Helix must decode faster than realtime; the app-wide -Og (debug
-# optimizations) is too slow for 44.1 kHz stereo on the M33
+# Helix and the FLAC decoder must decode faster than realtime; the
+# app-wide -Og (debug optimizations) is too slow for 44.1 kHz stereo
 set_source_files_properties(
   lib/helix/mp3dec.c
   lib/helix/mp3tabs.c
@@ -69,5 +70,6 @@ set_source_files_properties(
   lib/helix/real/stproc.c
   lib/helix/real/subband.c
   lib/helix/real/trigtabs.c
+  src/flac.c
   PROPERTIES COMPILE_OPTIONS "-O2"
 )

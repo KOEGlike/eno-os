@@ -18,11 +18,11 @@
 #define INITIAL_BLOCKS 16
 #define TIMEOUT 2000
 #define BLOCK_SIZE (BYTES_PER_SAMPLE * SAMPLES_PER_BLOCK)
-/* Slab deeper than the driver msgq (CONFIG_I2S_NRFX_TX_BLOCK_COUNT=24):
- * the pump then blocks inside i2s_buf_write for pacing instead of
- * racing the DMA for freed blocks
+/* The pump paces itself at QUEUE_SOFT_LIMIT blocks (see audio.c), so
+ * the slab only needs to cover the driver msgq (16) plus a couple of
+ * blocks in flight. FLAC decoding needs the BSS this frees.
  */
-#define BLOCK_COUNT (INITIAL_BLOCKS + 20)
+#define BLOCK_COUNT 18
 #define PROGRESS_UI_UPDATE_MS 400
 
 enum playback_state {

@@ -21,6 +21,12 @@ LOG_MODULE_REGISTER(METADATA, LOG_LEVEL_INF);
 /* Cap art frame size: typical embedded covers are well below this */
 #define MAX_ART_FRAME_SIZE (2 * 1024 * 1024)
 
+/* FLAC metadata block types */
+#define FLAC_VORBIS_COMMENT 4
+#define FLAC_PICTURE 6
+#define FLAC_COMMENT_BUF 2048
+#define FLAC_PICTURE_HEADER_PROBE 512
+
 static bool read_exact(struct fs_file_t *file, uint8_t *buf, size_t len)
 {
 	ssize_t got = fs_read(file, buf, len);
@@ -353,10 +359,386 @@ static bool id3v2_scan_text(const char *path, char *title, size_t title_len,
 	return present;
 }
 
-static bool id3v1_scan(const char *path, char *title, size_t title_len,
+/* ---- FLAC metadata (VORBIS_COMMENT tags, PICTURE art) ---- */
+
+/* Case-insensitive substring search (portable memmem replacement),
+ * defined further below; forward declared for the FLAC art scan
+ */
+static const uint8_t *find_ci(const uint8_t *hay, size_t hay_len,
+	const char *needle);
+
+/* Sniff the file format: returns 'F' for FLAC, 'I' for MP3/ID3, 0 on
+ * error. FLAC files with a prepended ID3v2 tag are recognized by
+ * checking past the tag (mirrors decoder_open).
+ */
+static char sniff_format(const char *path)
+{
+	struct fs_file_t file;
+	uint8_t magic[10];
+	char fmt = 0;
+
+	fs_file_t_init(&file);
+	if (sd_card_open(path, &file))
+	{
+		return 0;
+	}
+
+	if (read_exact(&file, magic, sizeof(magic)))
+	{
+		if (memcmp(magic, "fLaC", 4) == 0)
+		{
+			fmt = 'F';
+		}
+		else if (memcmp(magic, "ID3", 3) == 0)
+		{
+			uint32_t tag = 10 + (((uint32_t)(magic[6] & 0x7f) << 21) |
+				     ((uint32_t)(magic[7] & 0x7f) << 14) |
+				     ((uint32_t)(magic[8] & 0x7f) << 7) |
+				     (uint32_t)(magic[9] & 0x7f)) +
+			       ((magic[5] & 0x10) ? 10 : 0);
+
+			if (fs_seek(&file, (off_t)tag, FS_SEEK_SET) == 0 &&
+				read_exact(&file, magic, 4) &&
+				memcmp(magic, "fLaC", 4) == 0)
+			{
+				fmt = 'F';
+			}
+			else
+			{
+				fmt = 'I';
+			}
+		}
+		else
+		{
+			fmt = 'I';
+		}
+	}
+
+	sd_card_close(&file);
+	return fmt;
+}
+
+/* Copy a VORBIS_COMMENT value (UTF-8) as display text */
+static void copy_vorbis_value(const uint8_t *src, size_t len, char *dst, size_t dst_len)
+{
+	size_t o = 0;
+
+	dst[0] = '\0';
+	for (size_t i = 0; i < len && o + 1 < dst_len; i++)
+	{
+		if (src[i] == '\0')
+		{
+			break;
+		}
+		dst[o++] = (src[i] < 0x80) ? (char)src[i] : '_';
+	}
+	dst[o] = '\0';
+}
+
+/* Position the file at the fLaC marker: offset 0 for plain files,
+ * past a prepended ID3v2 tag otherwise (mirrors decoder_open).
+ * Returns false when the file is not FLAC.
+ */
+static bool flac_seek_stream_start(struct fs_file_t *file)
+{
+	uint8_t magic[10];
+	off_t start = 0;
+	bool is_flac;
+
+	if (!read_exact(file, magic, sizeof(magic)))
+	{
+		return false;
+	}
+
+	if (memcmp(magic, "ID3", 3) == 0)
+	{
+		start = 10 + (((uint32_t)(magic[6] & 0x7f) << 21) |
+			((uint32_t)(magic[7] & 0x7f) << 14) |
+			((uint32_t)(magic[8] & 0x7f) << 7) |
+			(uint32_t)(magic[9] & 0x7f)) +
+			((magic[5] & 0x10) ? 10 : 0);
+	}
+
+	is_flac = skip_to(file, start) && read_exact(file, magic, 4) &&
+		memcmp(magic, "fLaC", 4) == 0;
+	if (!is_flac)
+	{
+		return false;
+	}
+
+	/* rewind to the marker: callers re-read it */
+	return skip_to(file, start);
+}
+
+static bool flac_scan_text(const char *path, char *title, size_t title_len,
 	char *artist, size_t artist_len)
 {
 	struct fs_file_t file;
+	uint8_t magic[4];
+	bool found = false;
+
+	fs_file_t_init(&file);
+	if (sd_card_open(path, &file))
+	{
+		return false;
+	}
+
+	if (!flac_seek_stream_start(&file) ||
+		!read_exact(&file, magic, sizeof(magic)) ||
+		memcmp(magic, "fLaC", 4) != 0)
+	{
+		sd_card_close(&file);
+		return false;
+	}
+
+	while (true)
+	{
+		uint8_t hdr[4];
+		uint8_t buf[FLAC_COMMENT_BUF];
+		bool last;
+		uint8_t type;
+		uint32_t len;
+		uint32_t vendor_len;
+		uint32_t count;
+		uint32_t pos;
+
+		if (!read_exact(&file, hdr, sizeof(hdr)))
+		{
+			break;
+		}
+		last = (hdr[0] & 0x80) != 0;
+		type = hdr[0] & 0x7f;
+		len = ((uint32_t)hdr[1] << 16) | ((uint32_t)hdr[2] << 8) | hdr[3];
+
+		if (type == FLAC_VORBIS_COMMENT && len >= 8)
+		{
+			size_t got = MIN(len, sizeof(buf));
+
+			if (!read_exact(&file, buf, got))
+			{
+				break;
+			}
+
+			vendor_len = (uint32_t)buf[0] | ((uint32_t)buf[1] << 8) |
+				((uint32_t)buf[2] << 16) | ((uint32_t)buf[3] << 24);
+			/* wrap-proof: vendor_len + count field must fit */
+			if (vendor_len > got - 8)
+			{
+				LOG_DBG("Vorbis vendor string exceeds probe, skipping tags");
+				break;
+			}
+			pos = 4 + vendor_len;
+
+			if (pos + 4 <= got)
+			{
+				count = (uint32_t)buf[pos] | ((uint32_t)buf[pos + 1] << 8) |
+					((uint32_t)buf[pos + 2] << 16) | ((uint32_t)buf[pos + 3] << 24);
+				pos += 4;
+
+				for (uint32_t c = 0; c < count && pos + 4 <= got; c++)
+				{
+					uint32_t clen = (uint32_t)buf[pos] |
+						((uint32_t)buf[pos + 1] << 8) |
+						((uint32_t)buf[pos + 2] << 16) |
+						((uint32_t)buf[pos + 3] << 24);
+
+					pos += 4;
+					/* wrap-proof against corrupt length fields */
+					if (clen > got - pos)
+					{
+						break;
+					}
+
+					const uint8_t *eq = memchr(buf + pos, '=', clen);
+
+					if (eq != NULL)
+					{
+						size_t key_len = (size_t)(eq - (buf + pos));
+
+						if ((key_len == 5 && strncasecmp((const char *)buf + pos, "TITLE", 5) == 0) ||
+							(key_len == 6 && strncasecmp((const char *)buf + pos, "ARTIST", 6) == 0))
+						{
+							if (key_len == 5)
+							{
+								copy_vorbis_value(eq + 1, clen - key_len - 1,
+									title, title_len);
+							}
+							else
+							{
+								copy_vorbis_value(eq + 1, clen - key_len - 1,
+									artist, artist_len);
+							}
+							found = true;
+						}
+					}
+					pos += clen;
+				}
+			}
+
+			/* skip the rest of the block content */
+			if (len > got && fs_seek(&file, (off_t)(len - got), FS_SEEK_CUR))
+			{
+				break;
+			}
+		}
+		else if (len > 0 && fs_seek(&file, (off_t)len, FS_SEEK_CUR))
+		{
+			break;
+		}
+
+		if (last)
+		{
+			break;
+		}
+	}
+
+	sd_card_close(&file);
+	return found;
+}
+
+static bool flac_scan_art(const char *path, struct fs_file_t *file,
+	size_t *offset, size_t *len)
+{
+	struct fs_file_t scan;
+	uint8_t magic[4];
+	bool found = false;
+
+	fs_file_t_init(file);
+	fs_file_t_init(&scan);
+
+	if (sd_card_open(path, &scan))
+	{
+		return false;
+	}
+
+	if (!flac_seek_stream_start(&scan) ||
+		!read_exact(&scan, magic, sizeof(magic)) ||
+		memcmp(magic, "fLaC", 4) != 0)
+	{
+		goto out;
+	}
+
+	while (true)
+	{
+		uint8_t hdr[4];
+		uint8_t buf[FLAC_PICTURE_HEADER_PROBE];
+		bool last;
+		uint8_t type;
+		uint32_t blk_len;
+		off_t content_pos;
+		uint32_t pos = 0;
+		uint32_t mime_len;
+		uint32_t desc_len;
+		uint32_t data_len;
+		uint32_t u32;
+		bool is_jpeg = false;
+
+		if (!read_exact(&scan, hdr, sizeof(hdr)))
+		{
+			break;
+		}
+		last = (hdr[0] & 0x80) != 0;
+		type = hdr[0] & 0x7f;
+		blk_len = ((uint32_t)hdr[1] << 16) | ((uint32_t)hdr[2] << 8) | hdr[3];
+		content_pos = fs_tell(&scan);
+
+		if (type == FLAC_PICTURE && blk_len >= 32)
+		{
+			size_t got = MIN(blk_len, sizeof(buf));
+
+			if (!read_exact(&scan, buf, got))
+			{
+				break;
+			}
+
+			pos = 4; /* picture type */
+			if (pos + 4 > got)
+			{
+				goto next_block;
+			}
+			mime_len = ((uint32_t)buf[pos] << 24) | ((uint32_t)buf[pos + 1] << 16) |
+				((uint32_t)buf[pos + 2] << 8) | buf[pos + 3];
+			pos += 4;
+			/* wrap-proof bounds for all remaining fixed fields:
+			 * mime + desc_len + 4 dims/depth/colors + data_len
+			 */
+			if (mime_len > got - pos - 24)
+			{
+				LOG_DBG("Picture mime string exceeds probe, skipping art");
+				goto next_block;
+			}
+			is_jpeg = find_ci(buf + pos, mime_len, "jpeg") != NULL ||
+				find_ci(buf + pos, mime_len, "jpg") != NULL;
+			pos += mime_len;
+
+			desc_len = ((uint32_t)buf[pos] << 24) | ((uint32_t)buf[pos + 1] << 16) |
+				((uint32_t)buf[pos + 2] << 8) | buf[pos + 3];
+			pos += 4;
+			if (desc_len > got - pos - 20)
+			{
+				LOG_DBG("Picture description exceeds probe, skipping art");
+				goto next_block;
+			}
+			pos += desc_len;
+
+			/* width, height, depth, colors */
+			for (int f = 0; f < 4; f++)
+			{
+				u32 = ((uint32_t)buf[pos] << 24) | ((uint32_t)buf[pos + 1] << 16) |
+					((uint32_t)buf[pos + 2] << 8) | buf[pos + 3];
+				(void)u32;
+				pos += 4;
+			}
+
+			data_len = ((uint32_t)buf[pos] << 24) | ((uint32_t)buf[pos + 1] << 16) |
+				((uint32_t)buf[pos + 2] << 8) | buf[pos + 3];
+			pos += 4;
+
+			/* the image data must fill the rest of the block and
+			 * stay within the art size cap
+			 */
+			if (is_jpeg && data_len > 0 && data_len <= blk_len - pos &&
+				pos <= blk_len && data_len <= MAX_ART_FRAME_SIZE)
+			{
+				off_t data_pos = content_pos + (off_t)pos;
+
+				if (sd_card_open(path, file))
+				{
+					goto out;
+				}
+				if (fs_seek(file, data_pos, FS_SEEK_SET))
+				{
+					sd_card_close(file);
+					goto out;
+				}
+				*offset = (size_t)data_pos;
+				*len = data_len;
+				found = true;
+				goto out;
+			}
+
+next_block:
+			(void)skip_to(&scan, content_pos + (off_t)blk_len);
+		}
+		else if (blk_len > 0 && fs_seek(&scan, (off_t)blk_len, FS_SEEK_CUR))
+		{
+			break;
+		}
+
+		if (last)
+		{
+			break;
+		}
+	}
+
+out:
+	sd_card_close(&scan);
+	return found;
+}
+
+static bool id3v1_scan(const char *path, char *title, size_t title_len,
+	char *artist, size_t artist_len)
+{	struct fs_file_t file;
 	uint8_t tail[ID3V1_SIZE];
 	bool found = false;
 
@@ -395,6 +777,12 @@ int metadata_read_info(const char *path, char *title, size_t title_len,
 	if (artist != NULL)
 	{
 		artist[0] = '\0';
+	}
+
+	if (sniff_format(path) == 'F')
+	{
+		flac_scan_text(path, title, title_len, artist, artist_len);
+		return 0;
 	}
 
 	if (!id3v2_scan_text(path, title, title_len, artist, artist_len))
@@ -494,6 +882,14 @@ static size_t apic_data_offset(const uint8_t *head, size_t head_len,
 int metadata_open_art(const char *path, struct fs_file_t *file,
 	size_t *offset, size_t *len)
 {
+	if (sniff_format(path) == 'F')
+	{
+		/* FLAC: report via boolean style like the FLAC text scan;
+		 * *file stays closed on failure
+		 */
+		return flac_scan_art(path, file, offset, len) ? 0 : -ENOENT;
+	}
+
 	struct fs_file_t scan;
 	uint8_t ver_major;
 	off_t tag_end;

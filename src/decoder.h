@@ -8,10 +8,11 @@
 enum audio_file_format {
 	AUDIO_FILE_WAV,
 	AUDIO_FILE_MP3,
+	AUDIO_FILE_FLAC,
 };
 
 /*
- * Unified streaming decoder: consumes a WAV or MP3 file opened by the
+ * Unified streaming decoder: consumes a WAV, MP3 or FLAC file opened by the
  * caller and produces interleaved stereo 16-bit PCM at the stream's
  * native sample rate. Mono sources are upmixed; 8/24/32-bit sources
  * are converted to 16-bit.
@@ -41,7 +42,7 @@ struct audio_decoder {
 	uint8_t src_bits;
 	uint8_t src_channels;
 
-	/* mp3 */
+	/* mp3 (elapsed_frames is also used by FLAC) */
 	void *mp3;
 	uint8_t *ring;
 	uint32_t ring_len;

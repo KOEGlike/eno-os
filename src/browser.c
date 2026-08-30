@@ -31,7 +31,8 @@ static bool ends_with_ci(const char *name, const char *ext)
 
 static bool is_audio_name(const char *name)
 {
-	return ends_with_ci(name, ".wav") || ends_with_ci(name, ".mp3");
+	return ends_with_ci(name, ".wav") || ends_with_ci(name, ".mp3") ||
+		ends_with_ci(name, ".flac");
 }
 
 void path_join(const char *dir, const char *name, char *out, size_t out_len)

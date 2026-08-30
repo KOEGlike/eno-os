@@ -6,6 +6,7 @@
 #include <stdlib.h>
 
 #include "mp3dec.h"
+#include "flac.h"
 #include "decoder.h"
 
 LOG_MODULE_REGISTER(decoder, LOG_LEVEL_INF);
@@ -548,6 +549,7 @@ int decoder_open(struct audio_decoder *dec, struct fs_file_t *file, uint32_t fil
 	uint8_t sniff[12];
 	ssize_t n;
 	int ret;
+	bool is_flac = false;
 
 	memset(dec, 0, sizeof(*dec));
 	dec->file = file;
@@ -563,10 +565,39 @@ int decoder_open(struct audio_decoder *dec, struct fs_file_t *file, uint32_t fil
 		return ret;
 	}
 
+	/* some taggers prepend an ID3v2 tag to FLAC files: look past it */
+	if (n >= 10 && memcmp(sniff, "ID3", 3) == 0) {
+		uint32_t tag = 10 + (((uint32_t)(sniff[6] & 0x7f) << 21) |
+				     ((uint32_t)(sniff[7] & 0x7f) << 14) |
+				     ((uint32_t)(sniff[8] & 0x7f) << 7) |
+				     (uint32_t)(sniff[9] & 0x7f)) +
+			       ((sniff[5] & 0x10) ? 10 : 0);
+		uint8_t magic[4];
+
+		if (tag + 4 <= file_size &&
+		    file_read_u32_at(file, tag, magic, 4) == 0 &&
+		    memcmp(magic, "fLaC", 4) == 0) {
+			is_flac = true;
+			dec->audio_start = tag;
+			ret = fs_seek(file, tag, FS_SEEK_SET);
+			if (ret < 0) {
+				return ret;
+			}
+		} else {
+			/* not FLAC after all: rewind so the MP3 parser
+			 * sees the ID3 tag and can skip it itself
+			 */
+			(void)fs_seek(file, 0, FS_SEEK_SET);
+		}
+	}
+
 	if (n == 12 && memcmp(sniff, "RIFF", 4) == 0 && memcmp(&sniff[8], "WAVE", 4) == 0) {
 		dec->format = AUDIO_FILE_WAV;
 		dec->raw_buf = wav_raw;
 		ret = wav_parse(dec);
+	} else if (is_flac || (n >= 4 && memcmp(sniff, "fLaC", 4) == 0)) {
+		dec->format = AUDIO_FILE_FLAC;
+		ret = flac_parse(dec);
 	} else {
 		dec->format = AUDIO_FILE_MP3;
 		dec->ring = mp3_ring;
@@ -621,6 +652,9 @@ size_t decoder_fill(struct audio_decoder *dec, int16_t *dst, size_t max_frames)
 
 	if (dec->format == AUDIO_FILE_WAV) {
 		return wav_fill(dec, dst, max_frames);
+	}
+	if (dec->format == AUDIO_FILE_FLAC) {
+		return flac_fill(dec, dst, max_frames);
 	}
 	return mp3_fill(dec, dst, max_frames);
 }
