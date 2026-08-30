@@ -74,6 +74,8 @@ static char cached_now_text[128];
 static char cached_time_text[32];
 static char cached_row_text[BROWSER_VISIBLE_ROWS][160];
 static int8_t cached_row_state[BROWSER_VISIBLE_ROWS]; /* -1 hidden */
+static lv_obj_t *sel_marker;
+static int cached_marker_row = -2; /* -1 hidden, -2 unknown */
 static char cached_title_text[128];
 static char cached_artist_text[MAX_ARTIST_LEN];
 static char cached_elapsed_text[16];
@@ -152,17 +154,13 @@ static void set_row(lv_obj_t *label, lv_obj_t *sep, int index, const char *text,
 	if (cached_row_state[index] != (selected ? 1 : 0))
 	{
 		cached_row_state[index] = selected ? 1 : 0;
-		if (selected)
-		{
-			lv_obj_set_style_bg_color(label, lv_color_black(), LV_PART_MAIN);
-			lv_obj_set_style_bg_opa(label, LV_OPA_COVER, LV_PART_MAIN);
-			lv_obj_set_style_text_color(label, lv_color_white(), LV_PART_MAIN);
-		}
-		else
-		{
-			lv_obj_set_style_bg_opa(label, LV_OPA_TRANSP, LV_PART_MAIN);
-			lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
-		}
+		/* selection = outline box around the row; text stays
+		 * black-on-white (small inverted text is hard to read on
+		 * the e-ink panel)
+		 */
+		lv_obj_set_style_border_color(label, lv_color_black(), LV_PART_MAIN);
+		lv_obj_set_style_border_opa(label, LV_OPA_COVER, LV_PART_MAIN);
+		lv_obj_set_style_border_width(label, selected ? 1 : 0, LV_PART_MAIN);
 	}
 
 	lv_obj_remove_flag(label, LV_OBJ_FLAG_HIDDEN);
@@ -284,6 +282,24 @@ static void refresh_browser(struct app_state *state)
 		}
 
 		set_row(row_labels[i], row_seps[i], i, text, entry == br->selected, true);
+	}
+
+	/* marker bar next to the selected row (when it is on screen) */
+	int sel_row = br->selected - br->scroll_top;
+
+	if (sel_row >= 0 && sel_row < BROWSER_VISIBLE_ROWS && br->count > 0)
+	{
+		if (cached_marker_row != sel_row)
+		{
+			cached_marker_row = sel_row;
+			lv_obj_set_pos(sel_marker, 0, LIST_Y + sel_row * ROW_STRIDE);
+		}
+		lv_obj_remove_flag(sel_marker, LV_OBJ_FLAG_HIDDEN);
+	}
+	else if (cached_marker_row != -1)
+	{
+		cached_marker_row = -1;
+		lv_obj_add_flag(sel_marker, LV_OBJ_FLAG_HIDDEN);
 	}
 }
 
@@ -446,12 +462,22 @@ int ui_init(void)
 		lv_obj_set_style_text_font(row_labels[i], &lv_font_montserrat_12, LV_STATE_DEFAULT);
 		lv_label_set_long_mode(row_labels[i], LV_LABEL_LONG_DOT);
 		lv_obj_set_width(row_labels[i], 194);
+		lv_obj_set_height(row_labels[i], 16);
+		lv_obj_set_style_pad_left(row_labels[i], 3, LV_STATE_DEFAULT);
 		lv_obj_set_pos(row_labels[i], 3, LIST_Y + i * ROW_STRIDE);
 
 		row_seps[i] = lv_obj_create(browser_view);
 		style_sep(row_seps[i]);
 		lv_obj_set_pos(row_seps[i], 0, LIST_Y + i * ROW_STRIDE + HEADER_H + 4);
 	}
+
+	/* selection marker: solid bar in the left margin next to the
+	 * outlined row
+	 */
+	sel_marker = lv_obj_create(browser_view);
+	style_bar(sel_marker);
+	lv_obj_set_size(sel_marker, 3, 16);
+	lv_obj_add_flag(sel_marker, LV_OBJ_FLAG_HIDDEN);
 
 	/* ---------- player view ---------- */
 	player_view = lv_obj_create(scr);
@@ -538,6 +564,7 @@ void ui_switch_mode(enum ui_mode mode)
 	{
 		cached_row_state[i] = -1;
 	}
+	cached_marker_row = -2;
 	cached_now_text[0] = '\0';
 	cached_time_text[0] = '\0';
 	cached_title_text[0] = '\0';
