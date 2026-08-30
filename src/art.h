@@ -8,8 +8,8 @@
  * Bit 1 = paper (white), bit 0 = ink (black), matching the mono
  * framebuffer convention of the display.
  */
-#define ART_W 134
-#define ART_H 134
+#define ART_W 120
+#define ART_H 120
 #define ART_STRIDE ((ART_W + 7) / 8)
 
 /* Decode the embedded JPEG album art of an MP3 into a dithered 1bpp

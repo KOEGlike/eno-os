@@ -33,10 +33,12 @@ static const struct device *display = DEVICE_DT_GET(DISPLAY_NODE);
 
 /* Player layout geometry */
 #define ART_SIZE ART_W
-#define ICONS_Y 142
-#define TIMES_Y 166
-#define PLAYER_BAR_Y 182
-#define PLAYER_BAR_H 8
+#define TITLE_Y 126
+#define ARTIST_Y 140
+#define ICONS_Y 156
+#define TIMES_Y 178
+#define PLAYER_BAR_Y 191
+#define PLAYER_BAR_H 7
 
 static lv_obj_t *browser_view;
 static lv_obj_t *player_view;
@@ -54,6 +56,8 @@ static lv_obj_t *art_img;
 static lv_obj_t *shuffle_img;
 static lv_obj_t *playpause_img;
 static lv_obj_t *loop_img;
+static lv_obj_t *title_label;
+static lv_obj_t *artist_label;
 static lv_obj_t *elapsed_label;
 static lv_obj_t *total_label;
 static lv_obj_t *player_progress;
@@ -70,6 +74,8 @@ static char cached_now_text[128];
 static char cached_time_text[32];
 static char cached_row_text[BROWSER_VISIBLE_ROWS][160];
 static int8_t cached_row_state[BROWSER_VISIBLE_ROWS]; /* -1 hidden */
+static char cached_title_text[128];
+static char cached_artist_text[MAX_ARTIST_LEN];
 static char cached_elapsed_text[16];
 static char cached_total_text[16];
 static int cached_browser_progress_w = -1;
@@ -168,6 +174,59 @@ static void format_time(char *buf, size_t len, uint32_t s)
 	snprintk(buf, len, "%02u:%02u", s / 60, s % 60);
 }
 
+/* Display name/artist of the playing song: ID3 title when the playing
+ * folder is the one being browsed (its entries carry the tags), file
+ * name otherwise. artist is empty when no tag is available.
+ */
+static void playing_title_artist(const struct app_state *state,
+	char *title, size_t title_len, char *artist, size_t artist_len)
+{
+	const struct browser_ctx *br = &state->browser;
+	const char *name = strrchr(state->playing_path, '/');
+	const char *tag_title = NULL;
+	const char *tag_artist = NULL;
+
+	name = (name != NULL) ? name + 1 : state->playing_path;
+
+	if (strcmp(br->cwd, state->playing_dir) == 0)
+	{
+		for (int i = 0; i < br->count; i++)
+		{
+			if (!br->entries[i].is_dir &&
+				strcmp(br->entries[i].name, name) == 0)
+			{
+				tag_title = br->entries[i].title;
+				tag_artist = br->entries[i].artist;
+				break;
+			}
+		}
+	}
+
+	if (tag_title != NULL && tag_title[0] != '\0')
+	{
+		strncpy(title, tag_title, title_len - 1);
+		title[title_len - 1] = '\0';
+	}
+	else
+	{
+		strncpy(title, name, title_len - 1);
+		title[title_len - 1] = '\0';
+	}
+
+	if (artist != NULL && artist_len > 0)
+	{
+		if (tag_artist != NULL)
+		{
+			strncpy(artist, tag_artist, artist_len - 1);
+			artist[artist_len - 1] = '\0';
+		}
+		else
+		{
+			artist[0] = '\0';
+		}
+	}
+}
+
 static void refresh_browser(struct app_state *state)
 {
 	char time_text[32];
@@ -183,28 +242,7 @@ static void refresh_browser(struct app_state *state)
 
 	if (state->playback_state != PLAYBACK_STOPPED && state->playing_path[0] != '\0')
 	{
-		const char *name = strrchr(state->playing_path, '/');
-		const char *title = NULL;
-
-		name = (name != NULL) ? name + 1 : state->playing_path;
-
-		/* prefer the ID3 title when the playing folder is the
-		 * one being browsed (its entries carry the tags)
-		 */
-		if (strcmp(br->cwd, state->playing_dir) == 0)
-		{
-			for (int i = 0; i < br->count; i++)
-			{
-				if (!br->entries[i].is_dir &&
-					strcmp(br->entries[i].name, name) == 0)
-				{
-					title = br->entries[i].title;
-					break;
-				}
-			}
-		}
-
-		snprintk(now_text, sizeof(now_text), "%s", (title != NULL && title[0] != '\0') ? title : name);
+		playing_title_artist(state, now_text, sizeof(now_text), NULL, 0);
 	}
 	else
 	{
@@ -284,6 +322,23 @@ static void refresh_player(struct app_state *state)
 	{
 		cached_playpause_icon = pp;
 		lv_image_set_src(playpause_img, pp ? &icon_pause : &icon_play);
+	}
+
+	/* song name + artist below the art, left aligned */
+	if (state->playback_state != PLAYBACK_STOPPED && state->playing_path[0] != '\0')
+	{
+		char title[128];
+		char artist[MAX_ARTIST_LEN];
+
+		playing_title_artist(state, title, sizeof(title), artist, sizeof(artist));
+		set_label_text(title_label, title, cached_title_text, sizeof(cached_title_text));
+		set_label_text(artist_label, artist, cached_artist_text, sizeof(cached_artist_text));
+	}
+	else
+	{
+		set_label_text(title_label, "Nothing playing",
+			cached_title_text, sizeof(cached_title_text));
+		set_label_text(artist_label, "", cached_artist_text, sizeof(cached_artist_text));
 	}
 
 	int sh = state->shuffle ? 1 : 0;
@@ -420,6 +475,20 @@ int ui_init(void)
 	lv_image_set_src(loop_img, &icon_loop_off);
 	lv_obj_set_pos(loop_img, 150, ICONS_Y);
 
+	title_label = lv_label_create(player_view);
+	lv_obj_set_style_text_color(title_label, lv_color_black(), LV_STATE_DEFAULT);
+	lv_obj_set_style_text_font(title_label, &lv_font_montserrat_12, LV_STATE_DEFAULT);
+	lv_label_set_long_mode(title_label, LV_LABEL_LONG_DOT);
+	lv_obj_set_width(title_label, 194);
+	lv_obj_set_pos(title_label, 3, TITLE_Y);
+
+	artist_label = lv_label_create(player_view);
+	lv_obj_set_style_text_color(artist_label, lv_color_black(), LV_STATE_DEFAULT);
+	lv_obj_set_style_text_font(artist_label, &lv_font_montserrat_12, LV_STATE_DEFAULT);
+	lv_label_set_long_mode(artist_label, LV_LABEL_LONG_DOT);
+	lv_obj_set_width(artist_label, 194);
+	lv_obj_set_pos(artist_label, 3, ARTIST_Y);
+
 	elapsed_label = lv_label_create(player_view);
 	lv_obj_set_style_text_color(elapsed_label, lv_color_black(), LV_STATE_DEFAULT);
 	lv_obj_set_style_text_font(elapsed_label, &lv_font_montserrat_12, LV_STATE_DEFAULT);
@@ -471,6 +540,8 @@ void ui_switch_mode(enum ui_mode mode)
 	}
 	cached_now_text[0] = '\0';
 	cached_time_text[0] = '\0';
+	cached_title_text[0] = '\0';
+	cached_artist_text[0] = '\0';
 	cached_elapsed_text[0] = '\0';
 	cached_total_text[0] = '\0';
 }
