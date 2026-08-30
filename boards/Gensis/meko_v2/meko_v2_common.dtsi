@@ -186,7 +186,13 @@
 		compatible = "zephyr,sdhc-spi-slot";
 		reg = <0>;
 		status = "okay";
-		spi-max-frequency = <8000000>;
+		/* 4 MHz: 8 MHz produced "Bad data CRC" hardware errors
+		 * under load (SPI signal margin), while 2 MHz is too
+		 * slow for 44.1 kHz FLAC reads. If CRC errors ever
+		 * reappear, drop back to 2000000 and widen the pump
+		 * queue instead.
+		 */
+		spi-max-frequency = <4000000>;
 
         sdmmc {
             compatible = "zephyr,sdmmc-disk";

@@ -47,9 +47,8 @@ static int prefill_failures;
 
 /* Keep the driver queue this deep at most: pause (which purges the
  * queue and resumes from the decoder position) then only skips about
- * this much audio, and the displayed progress stays within ~1 s of
- * what is audible. Must stay comfortably above the refill latency
- * of the SD card.
+ * this much audio. Blocks carry ~73 ms at 44.1 kHz (200 ms at 16 kHz),
+ * so 8 blocks is ~0.58 s of ride-out at the highest rate.
  */
 #define QUEUE_SOFT_LIMIT 8
 

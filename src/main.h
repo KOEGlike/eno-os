@@ -14,15 +14,20 @@
 #define SAMPLE_BIT_WIDTH 16
 #define BYTES_PER_SAMPLE 2
 #define NUMBER_OF_CHANNELS 2
-#define SAMPLES_PER_BLOCK ((SAMPLE_FREQUENCY / 10) * NUMBER_OF_CHANNELS)
-#define INITIAL_BLOCKS 16
-#define TIMEOUT 2000
-#define BLOCK_SIZE (BYTES_PER_SAMPLE * SAMPLES_PER_BLOCK)
+/* I2S block: sized for ~3200 frames at any rate (72.6 ms at 44.1 kHz,
+ * 200 ms at 16 kHz) so one SD read per block stays well under the
+ * audio time it carries even at 4 MHz SPI. Not derived from
+ * SAMPLE_FREQUENCY: high-rate streams need the bigger blocks.
+ */
+#define MAX_BLOCK_FRAMES 3200
+#define BLOCK_SIZE (MAX_BLOCK_FRAMES * NUMBER_OF_CHANNELS * BYTES_PER_SAMPLE)
 /* The pump paces itself at QUEUE_SOFT_LIMIT blocks (see audio.c), so
  * the slab only needs to cover the driver msgq (16) plus a couple of
- * blocks in flight. FLAC decoding needs the BSS this frees.
+ * blocks in flight.
  */
-#define BLOCK_COUNT 18
+#define BLOCK_COUNT 10
+#define INITIAL_BLOCKS 8
+#define TIMEOUT 2000
 #define PROGRESS_UI_UPDATE_MS 400
 
 enum playback_state {
