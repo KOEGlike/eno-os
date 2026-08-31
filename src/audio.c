@@ -44,6 +44,8 @@ static atomic_t pump_active;
 static K_SEM_DEFINE(audio_start_sem, 0, 1);
 /* consecutive unplayable-file auto-skips */
 static int prefill_failures;
+/* consecutive playback-error auto-skips (underruns etc.) */
+static int error_skip_count;
 
 /* Keep the driver queue this deep at most: pause (which purges the
  * queue and resumes from the decoder position) then only skips about
@@ -254,6 +256,7 @@ static void audio_thread_fn(void *a, void *b, void *c)
 			continue;
 		}
 		prefill_failures = 0;
+		error_skip_count = 0;
 
 		bool eof = false;
 		while (audio_state->playback_state == PLAYBACK_PLAYING &&
@@ -281,13 +284,28 @@ static void audio_thread_fn(void *a, void *b, void *c)
  				if (audio_state->playback_state == PLAYBACK_PLAYING)
  				{
  					LOG_ERR("Playback error: %d", ret);
- 					/* teardown first, then drop pump_active:
+ 					/* The I2S driver is in the ERROR state
+ 					 * and has already stopped/un-initialized
+ 					 * its nrfx instance; PREPARE purges the
+ 					 * queues and returns to READY without
+ 					 * touching it (a DROP here would assert
+ 					 * on the uninitialized nrfx state).
+ 					 * Teardown first, then drop pump_active:
  					 * main's stop_playback waits for
  					 * pump_active, so clearing it before the
  					 * teardown would let main race the
- 					 * decoder/i2s cleanup
+ 					 * decoder/i2s cleanup.
  					 */
- 					audio_stop_nolock(audio_state, true, true);
+ 					(void)i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_PREPARE);
+ 					audio_stop_nolock(audio_state, true, false);
+ 					/* skip to the next track (bounded) so a
+ 					 * transient SD stall does not halt the
+ 					 * player
+ 					 */
+ 					if (++error_skip_count < 8)
+ 					{
+ 						atomic_set(&audio_state->advance_request, 1);
+ 					}
  					atomic_set(&pump_active, 0);
  				}
 				else

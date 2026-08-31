@@ -1,5 +1,9 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/fatal.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/sys/reboot.h>
+#include <zephyr/sys/mem_stats.h>
 #include <string.h>
 
 #include <lvgl.h>
@@ -14,6 +18,29 @@
 #include "browser.h"
 
 LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
+
+/* The board exhibits rare transient flash-read corruption under load
+ * (fault dumps show garbage literal loads inside _isr_wrapper and
+ * undefined instructions at valid code; confirmed with two different
+ * SD cards). A warm reboot fully restores function and the boot flow
+ * never triggers the fault, so auto-recover instead of freezing.
+ */
+void k_sys_fatal_error_handler(unsigned int reason, const struct arch_esf *esf)
+{
+	LOG_ERR("Fatal %u pc 0x%08x lr 0x%08x -- rebooting",
+		reason,
+		(esf != NULL) ? esf->basic.pc : 0,
+		(esf != NULL) ? esf->basic.lr : 0);
+	sys_reboot(SYS_REBOOT_WARM);
+
+	CODE_UNREACHABLE;
+}
+
+/* LVGL heap diagnostics: the LVGL pool sits directly before the idle
+ * thread TCB; periodic headroom logs watch for allocation pressure
+ * near the pool end while the corruption source is investigated.
+ */
+extern void lvgl_heap_stats(struct sys_memory_stats *stats);
 
 static struct app_state app = {
 	.browser = {
@@ -579,6 +606,20 @@ int main(void)
 		}
 
 		now_ms = k_uptime_get();
+
+		static int64_t last_heap_log_ms;
+
+		if (now_ms - last_heap_log_ms >= 30000)
+		{
+			struct sys_memory_stats stats;
+
+			lvgl_heap_stats(&stats);
+			last_heap_log_ms = now_ms;
+			LOG_INF("LVGL heap: free %zu allocated %zu peak %zu",
+				stats.free_bytes, stats.allocated_bytes,
+				stats.max_allocated_bytes);
+		}
+
 		if ((app.playback_state != PLAYBACK_PLAYING || did_ui_refresh) &&
 			(now_ms - last_lvgl_handler_ms) >= 50)
 		{

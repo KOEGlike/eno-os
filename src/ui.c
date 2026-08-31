@@ -21,7 +21,12 @@ LOG_MODULE_REGISTER(UI, LOG_LEVEL_DBG);
 static const struct device *display = DEVICE_DT_GET(DISPLAY_NODE);
 
 /* Full refreshes clear ghosting accumulated by partial refreshes */
-#define FULL_REFRESH_INTERVAL 10
+/* Partial updates accumulate ghosting slowly with this content, so
+ * the ghosting-clearing full refresh is deliberately rare. Small
+ * changes (elapsed time, scroll steps, volume) must not cause
+ * full-panel flashes.
+ */
+#define FULL_REFRESH_INTERVAL 60
 
 /* Browser layout geometry (200x200 panel) */
 #define PROGRESS_H 3
@@ -575,6 +580,12 @@ void ui_switch_mode(enum ui_mode mode)
 
 void ui_full_refresh_check(struct app_state *state)
 {
+	/* never accumulate toward a full refresh during playback */
+	if (state->playback_state == PLAYBACK_PLAYING)
+	{
+		return;
+	}
+
 	partial_refreshes++;
 
 	if (partial_refreshes < FULL_REFRESH_INTERVAL)
@@ -587,14 +598,8 @@ void ui_full_refresh_check(struct app_state *state)
 	/*
 	 * Toggling blanking makes the display driver switch to the
 	 * full-refresh profile and trigger a full update, which
-	 * clears accumulated ghosting. Skip while playing since the
-	 * full refresh blocks for a couple of seconds.
+	 * clears accumulated ghosting.
 	 */
-	if (state->playback_state == PLAYBACK_PLAYING)
-	{
-		return;
-	}
-
 	lvgl_lock();
 	display_blanking_on(display);
 	display_blanking_off(display);
